@@ -162,8 +162,9 @@ Rules:
   the only audio change and it happens on the exported copy only.
 - Sample filenames sanitized (ASCII, no `/\:*?"<>|`) and made unique within
   the program; program name sanitized the same way.
-- Output: `<export dir>/Drums/<Name>.xpm` or `<export dir>/Synths/<Name>.xpm`
-  plus its `_[ProgramData]` folder. Exporting over an existing program asks
+- Output: one folder per program, `<export dir>/Drums/<Name>/` or
+  `<export dir>/Synths/<Name>/`, holding `<Name>.xpm` and its `<Name>_[ProgramData]/`
+  folder (so each program is one folder to copy). Exporting over an existing program asks
   for confirmation in the UI.
 
 ### Verification

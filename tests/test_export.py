@@ -13,8 +13,8 @@ def test_export_drum(cfg):
         "0": "Drums/Kick 01.wav", "1": "Other/Kick 01.wav", "2": "Old/adpcm.wav",
         "3": "sonidios de dios/Golpe ñandú #1.wav"}}
     xpm = export_program(cfg, draft)
-    assert xpm == cfg.export_dir / "Drums/Test Kit.xpm"
-    pd = cfg.export_dir / "Drums/Test Kit_[ProgramData]"
+    assert xpm == cfg.export_dir / "Drums/Test Kit/Test Kit.xpm"
+    pd = cfg.export_dir / "Drums/Test Kit/Test Kit_[ProgramData]"
     assert sorted(p.name for p in pd.iterdir()) == ["Golpe nandu #1.wav", "Kick 01 2.wav", "Kick 01.wav", "adpcm.wav"]
     assert sf.info(pd / "adpcm.wav").subtype == "PCM_16"
     data, _ = sf.read(pd / "Kick 01.wav")
@@ -27,7 +27,7 @@ def test_export_drum(cfg):
 def test_export_without_normalize_copies_bytes(cfg):
     draft = {"type": "drum", "name": "Raw", "pads": {"0": "Drums/Kick 01.wav"}}
     export_program(cfg, draft, normalize=False)
-    copied = cfg.export_dir / "Drums/Raw_[ProgramData]/Kick 01.wav"
+    copied = cfg.export_dir / "Drums/Raw/Raw_[ProgramData]/Kick 01.wav"
     assert copied.read_bytes() == (cfg.library / "Drums/Kick 01.wav").read_bytes()
 
 
@@ -45,7 +45,7 @@ def test_export_synth_shared_gain(cfg):
     xpm = export_program(cfg, draft)
     ins = read_xpm(xpm)[1]["data"]["drum"]["instruments"]
     assert [(i["lowNote"], i["highNote"], i["layersv"][0]["rootNote"]) for i in ins] == [(0, 64, 60), (65, 127, 69)]
-    pd = cfg.export_dir / "Synths/Lead_[ProgramData]"
+    pd = cfg.export_dir / "Synths/Lead/Lead_[ProgramData]"
     peaks = [np.abs(sf.read(pd / f)[0]).max() for f in ("Lead_C3.wav", "Lead_A3.wav")]
     assert abs(max(peaks) - 10 ** (-1 / 20)) < 1e-3
     assert abs(peaks[1] / peaks[0] - 0.5) < 0.01  # relative level kept
@@ -54,7 +54,7 @@ def test_export_synth_shared_gain(cfg):
 def test_export_mp3_without_normalize_is_real_wav(cfg):
     sf.write(cfg.library / "Synth/tone.mp3", np.zeros(4410, dtype=np.float32) + 0.1, 44100, format="MP3")
     export_program(cfg, {"type": "drum", "name": "Mp3", "pads": {"0": "Synth/tone.mp3"}}, normalize=False)
-    info = sf.info(cfg.export_dir / "Drums/Mp3_[ProgramData]/tone.wav")
+    info = sf.info(cfg.export_dir / "Drums/Mp3/Mp3_[ProgramData]/tone.wav")
     assert info.format == "WAV" and info.subtype == "PCM_16"
 
 
@@ -64,7 +64,7 @@ def test_failed_overwrite_keeps_previous_export(cfg):
     (cfg.library / "Drums/Snare 01.wav").unlink()
     with pytest.raises(DraftError):
         export_program(cfg, draft, overwrite=True)
-    assert xpm.exists() and (cfg.export_dir / "Drums/Keep_[ProgramData]/Snare 01.wav").exists()
+    assert xpm.exists() and (cfg.export_dir / "Drums/Keep/Keep_[ProgramData]/Snare 01.wav").exists()
 
 
 def test_failed_export_leaves_nothing_behind(cfg):

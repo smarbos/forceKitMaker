@@ -32,10 +32,11 @@ def export_program(cfg: Config, draft: dict, normalize: bool = True, overwrite: 
     validate_draft(draft)
     is_drum = draft["type"] == "drum"
     name = safe_name(draft["name"])
-    folder = cfg.export_dir / ("Drums" if is_drum else "Synths")
+    type_dir = cfg.export_dir / ("Drums" if is_drum else "Synths")
+    folder = type_dir / name  # one folder per program: <name>.xpm + <name>_[ProgramData]/
     xpm_path = folder / f"{name}.xpm"
     data_dir = folder / f"{name}_[ProgramData]"
-    if (xpm_path.exists() or data_dir.exists()) and not overwrite:
+    if folder.exists() and not overwrite:
         raise ExportExists(xpm_path)
 
     if is_drum:
@@ -50,8 +51,8 @@ def export_program(cfg: Config, draft: dict, normalize: bool = True, overwrite: 
         sample_name = unique_name(safe_name(src.stem), taken)
         refs.append((key, SampleRef(sample_name, f"{sample_name}.wav"), src))
 
-    folder.mkdir(parents=True, exist_ok=True)
-    staging = folder / f".{name}.forcekit-tmp"
+    type_dir.mkdir(parents=True, exist_ok=True)
+    staging = type_dir / f".{name}.forcekit-tmp"  # becomes the program folder once complete
     shutil.rmtree(staging, ignore_errors=True)
     staged_data = staging / data_dir.name
     staged_data.mkdir(parents=True)
@@ -65,10 +66,8 @@ def export_program(cfg: Config, draft: dict, normalize: bool = True, overwrite: 
             header, doc = build_keygroup(name, zones)
         write_xpm(staging / xpm_path.name, header, doc)
         # Everything is built; only now replace the previous export.
-        xpm_path.unlink(missing_ok=True)
-        shutil.rmtree(data_dir, ignore_errors=True)
-        staged_data.rename(data_dir)
-        (staging / xpm_path.name).rename(xpm_path)
+        shutil.rmtree(folder, ignore_errors=True)
+        staging.rename(folder)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
     return xpm_path
