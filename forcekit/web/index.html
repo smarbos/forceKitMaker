@@ -20,10 +20,11 @@
     <div class="row">
       <input id="file-filter" type="search" placeholder="Filter samples">
       <select id="hint-filter" aria-label="Type"><option value="">all types</option></select>
+      <label class="small" title="Hide loops and files longer than 4 s"><input id="one-shots" type="checkbox"> Hide loops &amp; long</label>
     </div>
     <div id="folder-title" class="muted"></div>
     <div id="files" class="files" tabindex="0"></div>
-    <p class="muted small">↑/↓ play · Space replay · Enter / double-click / drag to assign</p>
+    <p class="muted small">↑/↓ play · Space replay · Enter / double-click / drag to assign · [ / ] swap pad sound</p>
   </section>
   <section class="col" id="program" aria-label="Program">
     <div class="row">
@@ -37,6 +38,7 @@
     </div>
     <input id="program-name" type="text" aria-label="Program name">
     <div id="drum-panel">
+      <button id="autofill" type="button" class="wide" title="New kit from the open folder and its subfolders, in the standard layout">Auto-fill kit from this folder</button>
       <div class="seg banks" id="banks" role="group" aria-label="Pad bank"></div>
       <div id="pads" class="pads"></div>
     </div>

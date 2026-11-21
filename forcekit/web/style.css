@@ -87,17 +87,24 @@ input[type=checkbox] { accent-color: var(--accent); }
   box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 2px 3px rgba(0,0,0,.6);
   transition: box-shadow .12s, background .12s;
 }
+/* a filled pad lights in its sound type's color (--pad-color, set per pad) */
 .pad.filled {
-  background: linear-gradient(160deg, rgba(60,255,90,.34), rgba(60,255,90,.16) 60%, rgba(60,255,90,.10)), var(--pad);
-  border-color: rgba(60,255,90,.55);
-  box-shadow: 0 0 10px rgba(60,255,90,.25), inset 0 0 14px rgba(60,255,90,.18), 0 2px 3px rgba(0,0,0,.6);
+  --pc: var(--pad-color, var(--lit));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--pc) 34%, transparent),
+              color-mix(in srgb, var(--pc) 16%, transparent) 60%, color-mix(in srgb, var(--pc) 10%, transparent)), var(--pad);
+  border-color: color-mix(in srgb, var(--pc) 55%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--pc) 25%, transparent),
+              inset 0 0 14px color-mix(in srgb, var(--pc) 18%, transparent), 0 2px 3px rgba(0,0,0,.6);
 }
-.pad.hit { background: var(--lit); box-shadow: 0 0 22px rgba(60,255,90,.7); }
-.pad.hit .label, .pad.hit .sample { color: #062b0c; }
+.pad.hit { background: var(--pc, var(--lit)); box-shadow: 0 0 22px color-mix(in srgb, var(--pc, var(--lit)) 70%, transparent); }
+.pad.hit .label, .pad.hit .sample { color: #111; }
 .pad.selected { outline: 2px solid #fff; outline-offset: 2px; }
 .pad.drop { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .pad .label { font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
-.pad.filled .label { color: #b8ffc3; }
+.pad.filled .label { color: color-mix(in srgb, var(--pc) 60%, #fff); }
+.pad .step { position: absolute; bottom: 3px; right: 3px; display: flex; gap: 2px; }
+.pad .step button { padding: 0 5px; font-size: 10px; line-height: 16px; background: rgba(0,0,0,.45); border-color: transparent; }
+button.wide { width: 100%; margin-bottom: 10px; padding: 7px; }
 .pad .sample { font-size: 11px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; }
 .pad .clear, .synth-row .clear {
   position: absolute; top: 2px; right: 3px; border: 0; background: none; padding: 0 4px;

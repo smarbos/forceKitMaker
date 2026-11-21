@@ -18,6 +18,12 @@ const baseName = (path) => path.split("/").pop();
 const state = {
   tree: null, expanded: new Set([""]), folder: null, files: [], visible: [], selected: -1,
   program: null, stem: null, bank: 0, pad: 0, saveTimer: null, folderSeq: 0,
+  layout: { colors: {}, default: "#3cff5a", max_one_shot: 4 },
+  hints: new Map(),  // library path → type hint (null = untyped); filled from listings and /api/hints
+};
+const store = {  // per-browser conveniences; storage can be unavailable
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
 };
 const player = $("player");
 
@@ -205,6 +211,89 @@ function renderProgram() {
   if (p.type === "drum") renderPads(); else renderSynth();
 }
 
+function padColor(path) {
+  const hint = state.hints.get(path);
+  return (hint && state.layout.colors[hint]) || state.layout.default;
+}
+
+// Look up type hints for pad samples we haven't seen in a listing (e.g. after opening a draft).
+let hintsPending = false;
+async function ensureHints() {
+  if (hintsPending || !state.program || state.program.type !== "drum") return;
+  const missing = Object.values(state.program.pads).filter((p) => !state.hints.has(p));
+  if (!missing.length) return;
+  hintsPending = true;
+  const r = await api("/api/hints", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paths: missing }),
+  });
+  hintsPending = false;
+  for (const p of missing) state.hints.set(p, r.ok && p in r.body ? r.body[p] : null);
+  if (state.program.type === "drum") renderPads();
+}
+
+// Swap the selected pad's sample for the next/previous one of the same type in its folder.
+async function stepPad(dir) {
+  const p = state.program;
+  if (p.type !== "drum") return;
+  const idx = state.pad;
+  const path = p.pads[String(idx)];
+  if (!path) { status("Select a pad that has a sample"); return; }
+  const folder = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+  const r = await api("/api/folder?path=" + q(folder));
+  if (p !== state.program || p.pads[String(idx)] !== path) return;  // changed meanwhile
+  const entries = (r.body || []).filter((f) => !f.error);
+  entries.forEach((f) => state.hints.set(f.path, f.type_hint));
+  const me = entries.find((f) => f.path === path);
+  if (!me) { status("This sample is no longer in the library index", true); return; }
+  const pool = entries.filter((f) => !me.type_hint || f.type_hint === me.type_hint);
+  if (pool.length < 2) { status(`No other ${me.type_hint || "sample"} in this folder`); return; }
+  const next = pool[(pool.indexOf(me) + dir + pool.length) % pool.length];
+  p.pads[String(idx)] = next.path;
+  renderPads();
+  play(next.path);
+  flashPad(idx);
+  status(`${BANKS[Math.floor(idx / 16)]}${String(idx % 16 + 1).padStart(2, "0")}: ${baseName(next.path)}`);
+  scheduleSave();
+}
+
+// New kit from the open folder (and subfolders) in the standard layout; never touches the open kit.
+async function autofillKit() {
+  if (state.folder == null) return;
+  await flushSave();
+  const folder = state.folder;
+  const r = await api("/api/autofill", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ folder, one_shots: $("one-shots").checked }),
+  });
+  if (!r.ok) { status("Auto-fill failed: " + (r.body && r.body.error), true); return; }
+  const pads = r.body.pads;
+  const count = Object.keys(pads).length;
+  if (!count) { status("Nothing to fill from this folder", true); return; }
+  const missing = Object.values(pads).filter((p) => !state.hints.has(p));
+  if (missing.length) {
+    const h = await api("/api/hints", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paths: missing }),
+    });
+    for (const p of missing) state.hints.set(p, h.ok && p in h.body ? h.body[p] : null);
+  }
+  const base = folder ? folder.split("/").pop() : "Library";
+  const program = { type: "drum", name: base, pads };
+  for (let n = 2; ; n++) {  // find a free draft name: "808", "808 2", "808 3"…
+    const s = await api("/api/drafts/", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(program),
+    });
+    if (s.ok) { state.stem = s.body.stem; break; }
+    if (s.status !== 409 || n > 200) { status("Couldn't save the new kit: " + (s.body && s.body.error), true); return; }
+    program.name = `${base} ${n}`;
+  }
+  state.program = program;
+  state.bank = 0; state.pad = 0;
+  renderProgram();
+  loadDraftList();
+  status(`Auto-filled ${count} pads from ${folder || "the whole library"}`);
+}
+$("autofill").addEventListener("click", autofillKit);
+
 function renderPads() {
   const banks = $("banks");
   banks.textContent = "";
@@ -224,6 +313,7 @@ function renderPads() {
       const path = state.program.pads[String(idx)];
       const pad = el("div", "pad" + (path ? " filled" : "") + (idx === state.pad ? " selected" : ""));
       pad.dataset.idx = idx;
+      if (path) pad.style.setProperty("--pad-color", padColor(path));
       pad.append(el("span", "label", BANKS[state.bank] + String(row * 4 + col + 1).padStart(2, "0")));
       pad.append(el("span", "sample", path ? baseName(path).replace(/\.[^.]+$/, "") : ""));
       if (path) {
@@ -236,6 +326,16 @@ function renderPads() {
           renderPads(); scheduleSave();
         });
         pad.append(x);
+        if (idx === state.pad) {
+          const step = el("span", "step");
+          for (const [label, dir, tip] of [["◀", -1, "Previous sound of this type ([)"], ["▶", 1, "Next sound of this type (])"]]) {
+            const s = el("button", "", label);
+            s.type = "button"; s.title = tip;
+            s.addEventListener("click", (e) => { e.stopPropagation(); stepPad(dir); });
+            step.append(s);
+          }
+          pad.append(step);
+        }
       }
       pad.addEventListener("click", () => { state.pad = idx; renderPads(); if (path) { play(path); flashPad(idx); } });
       pad.addEventListener("dragover", (e) => { e.preventDefault(); pad.classList.add("drop"); });
@@ -249,6 +349,7 @@ function renderPads() {
       grid.append(pad);
     }
   }
+  ensureHints();
 }
 
 // Light a pad up briefly, like hitting it on the device.
@@ -386,6 +487,7 @@ async function openFolder(path) {
   const r = await api("/api/folder?path=" + q(path));
   if (seq !== state.folderSeq) return;  // a newer folder was clicked meanwhile
   state.files = r.body || [];
+  state.files.forEach((f) => state.hints.set(f.path, f.type_hint));
   state.selected = -1;
   $("folder-title").textContent = (path || "(top level)") + ` — ${state.files.length} samples`;
   renderFiles();
@@ -395,8 +497,11 @@ async function openFolder(path) {
 function renderFiles() {
   const text = $("file-filter").value.trim().toLowerCase();
   const hint = $("hint-filter").value;
+  const oneShots = $("one-shots").checked;
+  const isOneShot = (f) => f.type_hint !== "loop" && (f.duration == null || f.duration <= state.layout.max_one_shot);
   state.visible = state.files.filter((f) =>
-    (!text || baseName(f.path).toLowerCase().includes(text)) && (!hint || f.type_hint === hint));
+    (!text || baseName(f.path).toLowerCase().includes(text)) && (!hint || f.type_hint === hint)
+    && (!oneShots || isOneShot(f)));
   const box = $("files");
   box.textContent = "";
   state.visible.forEach((f, i) => {
@@ -439,17 +544,25 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     if (player.src) { player.currentTime = 0; player.play().catch(() => {}); }
   } else if (e.key === "Enter" && state.selected >= 0) { e.preventDefault(); assign(state.visible[state.selected]); }
+  else if (e.key === "]" || e.key === "[") { e.preventDefault(); stepPad(e.key === "]" ? 1 : -1); }
 });
 
 $("tree-filter").addEventListener("input", renderTree);
 $("file-filter").addEventListener("input", () => { state.selected = -1; renderFiles(); });
 $("hint-filter").addEventListener("change", () => { state.selected = -1; renderFiles(); });
+$("one-shots").addEventListener("change", () => {
+  store.set("forcekit.oneShots", $("one-shots").checked ? "1" : "0");
+  state.selected = -1; renderFiles();
+});
 
 // ---------- start ----------
 (async function init() {
   for (const h of ["kick", "snare", "clap", "hat", "tom", "cymbal", "perc", "fx", "vocal", "bass", "synth", "pad", "loop"]) {
     $("hint-filter").append(new Option(h, h));
   }
+  $("one-shots").checked = store.get("forcekit.oneShots") === "1";
+  const lay = await api("/api/layout");
+  if (lay.ok) state.layout = lay.body;
   resetExportButton();
   newProgram("drum");
   loadDraftList();
