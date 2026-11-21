@@ -38,3 +38,9 @@ def library(tmp_path) -> Path:
     (root / "Drums/.hidden.wav").write_bytes((root / "Drums/Kick 01.wav").read_bytes())
     (root / "Drums/readme.txt").write_text("not audio")
     return root
+
+
+@pytest.fixture
+def cfg(library, tmp_path):
+    from forcekit.config import Config
+    return Config(library=library, data_dir=tmp_path / "data", export_dir=tmp_path / "out")

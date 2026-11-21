@@ -1,0 +1,49 @@
+import numpy as np
+import pytest
+import soundfile as sf
+
+from forcekit.export import ExportExists, export_program
+from forcekit.xpm import read_xpm
+
+
+def test_export_drum(cfg):
+    draft = {"type": "drum", "name": "Test Kit", "pads": {
+        "0": "Drums/Kick 01.wav", "1": "Other/Kick 01.wav", "2": "Old/adpcm.wav",
+        "3": "sonidios de dios/Golpe ñandú #1.wav"}}
+    xpm = export_program(cfg, draft)
+    assert xpm == cfg.export_dir / "Drums/Test Kit.xpm"
+    pd = cfg.export_dir / "Drums/Test Kit_[ProgramData]"
+    assert sorted(p.name for p in pd.iterdir()) == ["Golpe nandu #1.wav", "Kick 01 2.wav", "Kick 01.wav", "adpcm.wav"]
+    assert sf.info(pd / "adpcm.wav").subtype == "PCM_16"
+    data, _ = sf.read(pd / "Kick 01.wav")
+    assert abs(np.abs(data).max() - 10 ** (-1 / 20)) < 1e-3
+    assert read_xpm(xpm)[1]["data"]["drum"]["instruments"][1]["layersv"][0]["sampleFile"] == "Kick 01 2.wav"
+    for p in cfg.library.rglob("*"):
+        assert p.stat().st_mtime < xpm.stat().st_mtime  # library untouched
+
+
+def test_export_without_normalize_copies_bytes(cfg):
+    draft = {"type": "drum", "name": "Raw", "pads": {"0": "Drums/Kick 01.wav"}}
+    export_program(cfg, draft, normalize=False)
+    copied = cfg.export_dir / "Drums/Raw_[ProgramData]/Kick 01.wav"
+    assert copied.read_bytes() == (cfg.library / "Drums/Kick 01.wav").read_bytes()
+
+
+def test_export_exists(cfg):
+    draft = {"type": "drum", "name": "K", "pads": {"0": "Drums/Kick 01.wav"}}
+    export_program(cfg, draft)
+    with pytest.raises(ExportExists):
+        export_program(cfg, draft)
+    export_program(cfg, draft, overwrite=True)
+
+
+def test_export_synth_shared_gain(cfg):
+    draft = {"type": "synth", "name": "Lead", "samples": [{"path": "Synth/Lead_A3.aif", "root": 69},
+                                                         {"path": "Synth/Lead_C3.wav", "root": 60}]}
+    xpm = export_program(cfg, draft)
+    ins = read_xpm(xpm)[1]["data"]["drum"]["instruments"]
+    assert [(i["lowNote"], i["highNote"], i["layersv"][0]["rootNote"]) for i in ins] == [(0, 64, 60), (65, 127, 69)]
+    pd = cfg.export_dir / "Synths/Lead_[ProgramData]"
+    peaks = [np.abs(sf.read(pd / f)[0]).max() for f in ("Lead_C3.wav", "Lead_A3.wav")]
+    assert abs(max(peaks) - 10 ** (-1 / 20)) < 1e-3
+    assert abs(peaks[1] / peaks[0] - 0.5) < 0.01  # relative level kept
