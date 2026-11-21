@@ -138,3 +138,12 @@ def test_unexpected_errors_return_json_500(srv, cfg):
     status, body = post_json(srv, "/api/export", {"draft": {"type": "drum", "name": "X", "pads": {
         "0": "Drums/Kick 01.wav"}}, "normalize": True, "overwrite": False})
     assert status == 500 and body["error"]
+
+
+def test_export_colors_by_type(srv, cfg):
+    from forcekit.xpm import read_xpm
+    d = {"type": "drum", "name": "Typed", "pads": {"0": "Drums/Kick 01.wav", "1": "Drums/Snare 01.wav"}}
+    status, body = post_json(srv, "/api/export", {"draft": d, "normalize": True, "overwrite": False})
+    assert status == 200
+    pads = read_xpm(body["path"])[1]["data"]["programPads"]["pads"]
+    assert pads["value0"] == 0xFF2A2A and pads["value1"] == 0xFFD21A

@@ -86,3 +86,9 @@ def test_export_sets_sample_start_and_end(cfg):
         assert (kick["Start"], kick["End"]) == (0, int(0.3 * sr) - 1)
         late = ins[1]["layersv"][0]["sliceInfo"]
         assert late["Start"] == 2206 - 44 and abs(late["End"] - (2205 + 4410 - 1 + 441)) <= 2
+
+
+def test_export_writes_colors(cfg):
+    draft = {"type": "drum", "name": "Colors", "pads": {"0": "Drums/Kick 01.wav"}}
+    _, doc = read_xpm(export_program(cfg, draft, colors={0: 0xFF2A2A}))
+    assert doc["data"]["programPads"]["pads"]["value0"] == 0xFF2A2A

@@ -12,6 +12,7 @@ from .audio import AudioError, browser_playable, detect_root, load, write_wav
 from .config import Config
 from .drafts import DraftError, delete_draft, list_drafts, load_draft, save_draft, validate_draft
 from .export import ExportExists, export_program
+from .layout import color_for
 from .names import natural_key, safe_name
 
 WEB_DIR = Path(__file__).parent / "web"
@@ -212,9 +213,14 @@ def make_server(cfg: Config, port: int = 0) -> ThreadingHTTPServer:
             body = self._body()
             if not isinstance(body, dict):
                 raise ApiError(400, "invalid request")
+            draft = body.get("draft")
+            colors = None
+            if isinstance(draft, dict) and draft.get("type") == "drum" and isinstance(draft.get("pads"), dict):
+                colors = {int(k): color_for(library.files.get(p, {}).get("type_hint"))
+                          for k, p in draft["pads"].items() if str(k).isdigit() and isinstance(p, str)}
             try:
-                written = export_program(cfg, body.get("draft"), normalize=bool(body.get("normalize", True)),
-                                         overwrite=bool(body.get("overwrite", False)))
+                written = export_program(cfg, draft, normalize=bool(body.get("normalize", True)),
+                                         overwrite=bool(body.get("overwrite", False)), colors=colors)
             except ExportExists as e:
                 raise ApiError(409, "program already exists", exists=True, path=str(e.path))
             except AudioError as e:

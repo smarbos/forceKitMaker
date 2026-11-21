@@ -53,7 +53,9 @@ def _set_layer(layer: dict, ref: SampleRef) -> None:
     layer["sliceInfo"]["End"] = ref.end
 
 
-def build_drum(name: str, pads: dict[int, SampleRef]) -> tuple[bytes, dict]:
+def build_drum(name: str, pads: dict[int, SampleRef],
+               colors: dict[int, int] | None = None) -> tuple[bytes, dict]:
+    """Drum program; `colors` (pad index → 0xRRGGBB) switches the pads to per-pad colors."""
     header, doc = _template("drum.xpm")
     doc = copy.deepcopy(doc)
     data = doc["data"]
@@ -64,6 +66,11 @@ def build_drum(name: str, pads: dict[int, SampleRef]) -> tuple[bytes, dict]:
             raise ValueError(f"pad {pad} out of range")
         _set_layer(instruments[pad]["layersv"][0], pads[pad])
         data["samples"].append(_sample_entry(pads[pad]))
+    if colors is not None:
+        program_pads = data["programPads"]
+        program_pads["Universal"]["value0"] = False
+        for key in program_pads["pads"]:  # value0..value127
+            program_pads["pads"][key] = colors.get(int(key[len("value"):]), 0)
     return header, doc
 
 

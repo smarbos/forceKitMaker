@@ -28,7 +28,8 @@ def _source(cfg: Config, rel: str) -> Path:
     return path
 
 
-def export_program(cfg: Config, draft: dict, normalize: bool = True, overwrite: bool = False) -> Path:
+def export_program(cfg: Config, draft: dict, normalize: bool = True, overwrite: bool = False,
+                   colors: dict[int, int] | None = None) -> Path:
     validate_draft(draft)
     is_drum = draft["type"] == "drum"
     name = safe_name(draft["name"])
@@ -59,7 +60,7 @@ def export_program(cfg: Config, draft: dict, normalize: bool = True, overwrite: 
     try:
         refs = _write_samples(refs, staged_data, normalize, is_drum)
         if is_drum:
-            header, doc = build_drum(name, {key: ref for key, ref, _ in refs})
+            header, doc = build_drum(name, {key: ref for key, ref, _ in refs}, colors)
         else:
             roots = [key for key, _, _ in refs]
             zones = [(ref, root, low, high) for (root, ref, _), (low, high) in zip(refs, key_ranges(roots))]
