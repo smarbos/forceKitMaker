@@ -56,3 +56,8 @@ def unique_name(name: str, taken: set[str]) -> str:
         candidate = f"{name} {n}"
     taken.add(candidate)
     return candidate
+
+
+def natural_key(text: str) -> list:
+    """Sort key that orders "Kick 2" before "Kick 10"."""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", text)]

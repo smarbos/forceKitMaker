@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import mimetypes
-import re
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -13,14 +12,10 @@ from .audio import AudioError, browser_playable, detect_root, load, write_wav
 from .config import Config
 from .drafts import DraftError, delete_draft, list_drafts, load_draft, save_draft, validate_draft
 from .export import ExportExists, export_program
-from .names import safe_name
+from .names import natural_key, safe_name
 
 WEB_DIR = Path(__file__).parent / "web"
 DEFAULT_ROOT = 60
-
-
-def _natural(text: str) -> list:
-    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", text)]
 
 
 class Library:
@@ -36,13 +31,13 @@ class Library:
         for f in index["files"]:
             self.by_folder.setdefault(f["folder"], []).append(f)
         for entries in self.by_folder.values():
-            entries.sort(key=lambda f: _natural(f["path"].rsplit("/", 1)[-1]))
+            entries.sort(key=lambda f: natural_key(f["path"].rsplit("/", 1)[-1]))
         self.tree = self._build_tree()
 
     def _build_tree(self) -> dict:
         root = {"name": self.root.name, "path": "", "count": len(self.by_folder.get("", [])), "children": []}
         nodes = {"": root}
-        for folder in sorted(self.by_folder, key=_natural):
+        for folder in sorted(self.by_folder, key=natural_key):
             if not folder:
                 continue
             parts = folder.split("/")
