@@ -42,3 +42,21 @@ def test_rescan_of_other_library_ignores_old_index(library, tmp_path):
     idx = scan_library(Config(library=library / "Synth", data_dir=data, export_dir=tmp_path / "o"))
     assert sorted(f["path"] for f in idx["files"]) == ["Lead_A3.aif", "Lead_C3.wav"]
     assert all(f["folder"] == "" for f in idx["files"])
+
+
+def test_scan_survives_unreadable_files(library, tmp_path):
+    import os
+    locked = library / "Drums/locked.wav"
+    locked.write_bytes((library / "Drums/Kick 01.wav").read_bytes())
+    locked.chmod(0)
+    (library / "Drums/broken.wav").symlink_to(library / "Drums/missing-target.wav")
+    os.close(os.open(os.fsencode(library / "Drums") + b"/caf\xe9.wav", os.O_CREAT | os.O_WRONLY))
+    try:
+        idx = scan_library(Config(library=library, data_dir=tmp_path / "d", export_dir=tmp_path / "o"))
+    finally:
+        locked.chmod(0o644)
+    by = {f["path"]: f for f in idx["files"]}
+    assert by["Drums/locked.wav"]["error"] and by["Drums/broken.wav"]["error"]
+    bad = [f for f in idx["files"] if f["path"].startswith("Drums/caf")]
+    assert len(bad) == 1 and "UTF-8" in bad[0]["error"]
+    assert by["Drums/Kick 01.wav"]["error"] is None

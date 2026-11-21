@@ -77,6 +77,14 @@ def browser_playable(entry_format: str, subtype: str | None) -> bool:
     return entry_format == "wav" and subtype in BROWSER_WAV_SUBTYPES
 
 
+FORCE_WAV_SUBTYPES = {"PCM_16", "PCM_24"}
+
+
+def force_copyable(fmt: str, subtype: str | None) -> bool:
+    """Plain 16/24-bit PCM WAV: copied byte-for-byte on export; everything else is converted."""
+    return fmt == "wav" and subtype in FORCE_WAV_SUBTYPES
+
+
 def export_subtype(subtype: str) -> str:
     return "PCM_24" if subtype in {"PCM_24", "PCM_32", "FLOAT", "DOUBLE"} else "PCM_16"
 

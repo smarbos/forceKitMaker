@@ -68,17 +68,27 @@ def file_hash(path: Path) -> str:
     return h.hexdigest()
 
 
+def _blank(rel: str) -> dict:
+    suffix = os.path.splitext(rel)[1].lower()
+    return {
+        "path": rel, "folder": rel.rsplit("/", 1)[0] if "/" in rel else "", "size": 0, "mtime": 0.0,
+        "duration": None, "samplerate": None, "channels": None, "subtype": None,
+        "format": {".aif": "aiff", ".aiff": "aiff"}.get(suffix, suffix.lstrip(".")),
+        "hash": "error:" + rel, "type_hint": type_hint(rel),
+        "note": parse_note(os.path.splitext(rel.rsplit("/", 1)[-1])[0]), "error": None, "dup_of": None,
+    }
+
+
 def _describe(args: tuple[str, str]) -> dict:
     root, rel = args
     path = Path(root) / rel
-    st = path.stat()
-    entry = {
-        "path": rel, "folder": rel.rsplit("/", 1)[0] if "/" in rel else "", "size": st.st_size,
-        "mtime": st.st_mtime, "duration": None, "samplerate": None, "channels": None, "subtype": None,
-        "format": {".aif": "aiff", ".aiff": "aiff"}.get(path.suffix.lower(), path.suffix.lower().lstrip(".")),
-        "hash": file_hash(path), "type_hint": type_hint(rel),
-        "note": parse_note(os.path.splitext(path.name)[0]), "error": None, "dup_of": None,
-    }
+    entry = _blank(rel)
+    try:
+        st = path.stat()
+        entry.update(size=st.st_size, mtime=st.st_mtime, hash=file_hash(path))
+    except OSError as e:  # unreadable, broken symlink, vanished mid-scan
+        entry["error"] = f"cannot read file: {e.strerror or e}"
+        return entry
     try:
         info = probe(path)
         entry.update(duration=round(info.duration, 4), samplerate=info.samplerate, channels=info.channels,
@@ -112,9 +122,20 @@ def scan_library(cfg: Config, progress: Callable[[int, int], None] | None = None
     paths = _walk(cfg)
     entries: dict[str, dict] = {}
     todo = []
-    for rel in paths:
+    unencodable = []
+    for rel in list(paths):
+        try:
+            rel.encode("utf-8")
+        except UnicodeEncodeError:  # e.g. Latin-1 names from old Windows zips
+            paths.remove(rel)
+            unencodable.append(rel)
+            continue
         old = previous.get(rel)
-        st = (root / rel).stat()
+        try:
+            st = (root / rel).stat()
+        except OSError:
+            todo.append(rel)
+            continue
         if old and old["size"] == st.st_size and old["mtime"] == st.st_mtime:
             entries[rel] = dict(old, dup_of=None)
         else:
@@ -138,6 +159,13 @@ def scan_library(cfg: Config, progress: Callable[[int, int], None] | None = None
             done += 1
             if progress:
                 progress(done, len(paths))
+    for rel in unencodable:
+        shown = rel.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
+        entry = _blank(shown)
+        entry["error"] = "filename is not valid UTF-8; rename the file to use it"
+        entries[shown] = entry
+        paths.append(shown)
+    paths.sort()
     first_by_hash: dict[str, str] = {}
     files = []
     for rel in paths:

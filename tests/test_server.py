@@ -112,3 +112,29 @@ def test_index_page(srv):
     assert get_status(srv, "/static/style.css") == 200
     assert get_status(srv, "/static/../server.py") in (403, 404)
     assert get_status(srv, "/static/%2e%2e/server.py") in (403, 404)
+
+
+def test_first_save_of_accented_name_keeps_draft(srv, cfg):
+    d = {"type": "drum", "name": "Café", "pads": {}}
+    assert put_json(srv, "/api/drafts/" + quote("Café"), d)["stem"] == "Cafe"
+    assert (cfg.drafts_dir / "Cafe.json").exists()
+    assert put_json(srv, "/api/drafts/Cafe", dict(d, pads={"0": "Drums/Kick 01.wav"}))["stem"] == "Cafe"
+    assert (cfg.drafts_dir / "Cafe.json").exists()
+
+
+def test_save_refuses_to_clobber_other_draft(srv, cfg):
+    put_json(srv, "/api/drafts/", {"type": "drum", "name": "Techno", "pads": {"0": "Drums/Kick 01.wav"}})
+    r = _request(srv, "/api/drafts/", "PUT", {"type": "drum", "name": "Techno", "pads": {}})
+    assert r.status == 409 and json.loads(r.read())["exists"]
+    put_json(srv, "/api/drafts/", {"type": "drum", "name": "Other", "pads": {}})
+    r = _request(srv, "/api/drafts/Other", "PUT", {"type": "drum", "name": "Techno", "pads": {}})
+    assert r.status == 409
+    assert get_json(srv, "/api/drafts/Techno")["pads"] == {"0": "Drums/Kick 01.wav"}
+
+
+def test_unexpected_errors_return_json_500(srv, cfg):
+    cfg.export_dir.parent.mkdir(parents=True, exist_ok=True)
+    cfg.export_dir.write_text("not a folder")
+    status, body = post_json(srv, "/api/export", {"draft": {"type": "drum", "name": "X", "pads": {
+        "0": "Drums/Kick 01.wav"}}, "normalize": True, "overwrite": False})
+    assert status == 500 and body["error"]

@@ -17,7 +17,7 @@ const baseName = (path) => path.split("/").pop();
 
 const state = {
   tree: null, expanded: new Set([""]), folder: null, files: [], visible: [], selected: -1,
-  program: null, stem: null, bank: 0, pad: 0, saveTimer: null,
+  program: null, stem: null, bank: 0, pad: 0, saveTimer: null, folderSeq: 0,
 };
 const player = $("player");
 
@@ -29,7 +29,10 @@ function status(msg, isError = false) {
 }
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, opts);
+  let res;
+  try { res = await fetch(path, opts); } catch {
+    return { ok: false, status: 0, body: { error: "forcekit server not reachable" } };
+  }
   let body = null;
   if (res.status !== 204) {
     try { body = await res.json(); } catch { body = null; }
@@ -63,12 +66,25 @@ function scheduleSave() {
   state.saveTimer = setTimeout(saveDraft, 800);
 }
 
+// Save now if an autosave is pending — call before leaving the current program.
+async function flushSave() {
+  if (state.saveTimer) await saveDraft();
+}
+
 async function saveDraft() {
+  clearTimeout(state.saveTimer);
+  state.saveTimer = null;
   const p = state.program;
   if (!p.name.trim()) return;
-  const r = await api("/api/drafts/" + q(state.stem || p.name), {
+  // An empty stem means "new draft"; the server refuses to overwrite another draft.
+  const r = await api("/api/drafts/" + q(state.stem || ""), {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p),
   });
+  if (p !== state.program) return;  // user moved on while saving
+  if (r.status === 409) {
+    status(`A draft named "${r.body.stem}" already exists — give this one another name`, true);
+    return;
+  }
   if (r.ok) {
     state.stem = r.body.stem;
     state.shownStem = r.body.stem;
@@ -93,6 +109,7 @@ async function loadDraftList() {
 $("drafts").addEventListener("change", async (e) => {
   const stem = e.target.value;
   if (!stem) return;
+  await flushSave();
   const r = await api("/api/drafts/" + q(stem));
   if (!r.ok) { status("Couldn't open draft", true); return; }
   state.program = r.body;
@@ -104,14 +121,20 @@ $("drafts").addEventListener("change", async (e) => {
 });
 
 $("delete-draft").addEventListener("click", async () => {
+  clearTimeout(state.saveTimer);
+  state.saveTimer = null;
   if (state.stem) await api("/api/drafts/" + q(state.stem), { method: "DELETE" });
   newProgram(state.program.type);
   loadDraftList();
   status("Draft deleted");
 });
 
-$("type-drum").addEventListener("click", () => { if (state.program.type !== "drum") newProgram("drum"); });
-$("type-synth").addEventListener("click", () => { if (state.program.type !== "synth") newProgram("synth"); });
+$("type-drum").addEventListener("click", async () => {
+  if (state.program.type !== "drum") { await flushSave(); newProgram("drum"); }
+});
+$("type-synth").addEventListener("click", async () => {
+  if (state.program.type !== "synth") { await flushSave(); newProgram("synth"); }
+});
 $("program-name").addEventListener("input", (e) => { state.program.name = e.target.value; scheduleSave(); });
 
 // ---------- assigning ----------
@@ -130,7 +153,9 @@ async function assign(entry, target) {
   if (p.samples.length >= MAX_SYNTH) { status(`A synth holds at most ${MAX_SYNTH} samples`, true); return; }
   if (p.samples.some((s) => s.path === entry.path)) { status("Already in this synth"); return; }
   const r = await api("/api/root?path=" + q(entry.path));
+  if (p !== state.program) return;  // switched program while the note was being detected
   if (!r.ok) { status("Couldn't read the note", true); return; }
+  if (p.samples.some((s) => s.path === entry.path)) return;  // added twice in quick succession
   let root = r.body.root;
   if (p.samples.some((s) => s.root === root)) {
     status(`${noteName(root)} is already used — pick another note for ${baseName(entry.path)}`, true);
@@ -340,7 +365,9 @@ function treeRow(node, depth, label) {
 async function openFolder(path) {
   state.folder = path;
   renderTree();
+  const seq = ++state.folderSeq;
   const r = await api("/api/folder?path=" + q(path));
+  if (seq !== state.folderSeq) return;  // a newer folder was clicked meanwhile
   state.files = r.body || [];
   state.selected = -1;
   $("folder-title").textContent = (path || "(top level)") + ` — ${state.files.length} samples`;

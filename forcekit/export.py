@@ -4,7 +4,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from .audio import browser_playable, export_subtype, gain_to, load, peak, probe, write_wav
+from .audio import export_subtype, force_copyable, gain_to, load, peak, probe, write_wav
 from .config import Config
 from .drafts import DraftError, validate_draft
 from .names import key_ranges, safe_name, unique_name
@@ -34,45 +34,56 @@ def export_program(cfg: Config, draft: dict, normalize: bool = True, overwrite: 
     folder = cfg.export_dir / ("Drums" if is_drum else "Synths")
     xpm_path = folder / f"{name}.xpm"
     data_dir = folder / f"{name}_[ProgramData]"
-    if xpm_path.exists() or data_dir.exists():
-        if not overwrite:
-            raise ExportExists(xpm_path)
-        xpm_path.unlink(missing_ok=True)
-        shutil.rmtree(data_dir, ignore_errors=True)
+    if (xpm_path.exists() or data_dir.exists()) and not overwrite:
+        raise ExportExists(xpm_path)
 
     if is_drum:
         items = [(int(pad), rel) for pad, rel in sorted(draft["pads"].items(), key=lambda kv: int(kv[0]))]
     else:
         items = [(s["root"], s["path"]) for s in sorted(draft["samples"], key=lambda s: s["root"])]
-    sources = [(key, _source(cfg, rel)) for key, rel in items]
+    sources = [(key, _source(cfg, rel)) for key, rel in items]  # fails before anything is touched
 
-    data_dir.mkdir(parents=True, exist_ok=True)
     taken: set[str] = set()
     refs: list[tuple[int, SampleRef, Path]] = []
     for key, src in sources:
         sample_name = unique_name(safe_name(src.stem), taken)
         refs.append((key, SampleRef(sample_name, f"{sample_name}.wav"), src))
 
+    folder.mkdir(parents=True, exist_ok=True)
+    staging = folder / f".{name}.forcekit-tmp"
+    shutil.rmtree(staging, ignore_errors=True)
+    staged_data = staging / data_dir.name
+    staged_data.mkdir(parents=True)
+    try:
+        _write_samples(refs, staged_data, normalize, is_drum)
+        if is_drum:
+            header, doc = build_drum(name, {key: ref for key, ref, _ in refs})
+        else:
+            roots = [key for key, _, _ in refs]
+            zones = [(ref, root, low, high) for (root, ref, _), (low, high) in zip(refs, key_ranges(roots))]
+            header, doc = build_keygroup(name, zones)
+        write_xpm(staging / xpm_path.name, header, doc)
+        # Everything is built; only now replace the previous export.
+        xpm_path.unlink(missing_ok=True)
+        shutil.rmtree(data_dir, ignore_errors=True)
+        staged_data.rename(data_dir)
+        (staging / xpm_path.name).rename(xpm_path)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    return xpm_path
+
+
+def _write_samples(refs: list[tuple[int, SampleRef, Path]], dest_dir: Path, normalize: bool, is_drum: bool) -> None:
     shared_gain = 1.0
     if normalize and not is_drum and refs:
         shared_gain = gain_to(TARGET_PEAK_DB, max(peak(load(src)[0]) for _, _, src in refs))
-
     for _, ref, src in refs:
-        dest = data_dir / ref.file
+        dest = dest_dir / ref.file
         info = probe(src)
-        if not normalize and browser_playable(info.format, info.subtype):
+        if not normalize and force_copyable(info.format, info.subtype):
             shutil.copyfile(src, dest)
             continue
         audio, sr, subtype = load(src)
         if normalize:
             audio = audio * (gain_to(TARGET_PEAK_DB, peak(audio)) if is_drum else shared_gain)
         write_wav(dest, audio, sr, export_subtype(subtype))
-
-    if is_drum:
-        header, doc = build_drum(name, {key: ref for key, ref, _ in refs})
-    else:
-        roots = [key for key, _, _ in refs]
-        zones = [(ref, root, low, high) for (root, ref, _), (low, high) in zip(refs, key_ranges(roots))]
-        header, doc = build_keygroup(name, zones)
-    write_xpm(xpm_path, header, doc)
-    return xpm_path

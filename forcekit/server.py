@@ -11,8 +11,9 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from .audio import AudioError, browser_playable, detect_root, load, write_wav
 from .config import Config
-from .drafts import DraftError, delete_draft, list_drafts, load_draft, save_draft
+from .drafts import DraftError, delete_draft, list_drafts, load_draft, save_draft, validate_draft
 from .export import ExportExists, export_program
+from .names import safe_name
 
 WEB_DIR = Path(__file__).parent / "web"
 DEFAULT_ROOT = 60
@@ -109,6 +110,8 @@ def make_server(cfg: Config, port: int = 0) -> ThreadingHTTPServer:
                 self._json(e.body, e.status)
             except (DraftError, ValueError) as e:
                 self._json({"error": str(e)}, 400)
+            except Exception as e:  # disk full, permissions… — always answer with JSON
+                self._json({"error": f"{type(e).__name__}: {e}"}, 500)
 
         def do_GET(self):
             self._dispatch("GET")
@@ -194,10 +197,16 @@ def make_server(cfg: Config, port: int = 0) -> ThreadingHTTPServer:
             self._json(load_draft(cfg, path[len("/api/drafts/"):]))
 
         def draft_put(self, path, query):
-            old_stem = path[len("/api/drafts/"):]
-            stem = save_draft(cfg, self._body())
-            if old_stem and old_stem != stem:  # renamed: drop the old file
-                delete_draft(cfg, old_stem)
+            raw_old = path[len("/api/drafts/"):]  # empty for a program never saved before
+            old = safe_name(raw_old) if raw_old else None
+            draft = self._body()
+            validate_draft(draft)
+            target = safe_name(draft["name"])
+            if target != old and (cfg.drafts_dir / f"{target}.json").exists():
+                raise ApiError(409, f"a draft named {target} already exists", exists=True, stem=target)
+            stem = save_draft(cfg, draft)
+            if old and old != stem:  # renamed: drop the old file
+                delete_draft(cfg, old)
             self._json({"stem": stem})
 
         def draft_delete(self, path, query):

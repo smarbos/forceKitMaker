@@ -2,6 +2,8 @@ import numpy as np
 import pytest
 import soundfile as sf
 
+from forcekit.audio import AudioError
+from forcekit.drafts import DraftError
 from forcekit.export import ExportExists, export_program
 from forcekit.xpm import read_xpm
 
@@ -47,3 +49,26 @@ def test_export_synth_shared_gain(cfg):
     peaks = [np.abs(sf.read(pd / f)[0]).max() for f in ("Lead_C3.wav", "Lead_A3.wav")]
     assert abs(max(peaks) - 10 ** (-1 / 20)) < 1e-3
     assert abs(peaks[1] / peaks[0] - 0.5) < 0.01  # relative level kept
+
+
+def test_export_mp3_without_normalize_is_real_wav(cfg):
+    sf.write(cfg.library / "Synth/tone.mp3", np.zeros(4410, dtype=np.float32) + 0.1, 44100, format="MP3")
+    export_program(cfg, {"type": "drum", "name": "Mp3", "pads": {"0": "Synth/tone.mp3"}}, normalize=False)
+    info = sf.info(cfg.export_dir / "Drums/Mp3_[ProgramData]/tone.wav")
+    assert info.format == "WAV" and info.subtype == "PCM_16"
+
+
+def test_failed_overwrite_keeps_previous_export(cfg):
+    draft = {"type": "drum", "name": "Keep", "pads": {"0": "Drums/Kick 01.wav", "1": "Drums/Snare 01.wav"}}
+    xpm = export_program(cfg, draft)
+    (cfg.library / "Drums/Snare 01.wav").unlink()
+    with pytest.raises(DraftError):
+        export_program(cfg, draft, overwrite=True)
+    assert xpm.exists() and (cfg.export_dir / "Drums/Keep_[ProgramData]/Snare 01.wav").exists()
+
+
+def test_failed_export_leaves_nothing_behind(cfg):
+    draft = {"type": "drum", "name": "Broken", "pads": {"0": "Drums/Kick 01.wav", "1": "Old/corrupt.wav"}}
+    with pytest.raises(AudioError):
+        export_program(cfg, draft)
+    assert list((cfg.export_dir / "Drums").iterdir()) == []
