@@ -10,6 +10,7 @@ def test_kind_hats():
     names = ["HH_OH_01.wav", "open hat.wav", "Hat Opn.wav", "ClosedHat.wav", "Shoe hat.wav"]
     assert [kind(e("x/" + n, "hat")) for n in names] == [
         "hat:open", "hat:open", "hat:open", "hat:closed", "hat:closed"]
+    assert kind(e("808/OHH.wav", "hat")) == "hat:open" and kind(e("808/CHH.wav", "hat")) == "hat:closed"
     assert kind(e("x/b.wav", "bass")) == "any"
     assert kind(e("x/b.wav")) == "any"
     assert kind(e("x/k.wav", "kick")) == "kick"

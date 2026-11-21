@@ -12,7 +12,7 @@ from .audio import AudioError, browser_playable, detect_root, load, write_wav
 from .config import Config
 from .drafts import DraftError, delete_draft, list_drafts, load_draft, save_draft, validate_draft
 from .export import ExportExists, export_program
-from .layout import color_for
+from .layout import DEFAULT_COLOR, MAX_ONE_SHOT, TYPE_COLORS, autofill, color_for, is_one_shot
 from .names import natural_key, safe_name
 
 WEB_DIR = Path(__file__).parent / "web"
@@ -126,12 +126,14 @@ def make_server(cfg: Config, port: int = 0) -> ThreadingHTTPServer:
                 if path == "/" or path.startswith("/static/"):
                     return self.static
                 return {"/api/tree": self.tree, "/api/folder": self.folder, "/api/audio": self.audio,
-                        "/api/root": self.root_note, "/api/drafts": self.drafts}.get(path) or (
+                        "/api/root": self.root_note, "/api/drafts": self.drafts,
+                        "/api/layout": self.layout}.get(path) or (
                     self.draft_get if path.startswith("/api/drafts/") else None)
             if path.startswith("/api/drafts/"):
                 return {"PUT": self.draft_put, "DELETE": self.draft_delete}.get(method)
-            if method == "POST" and path == "/api/export":
-                return self.export
+            if method == "POST":
+                return {"/api/export": self.export, "/api/autofill": self.autofill,
+                        "/api/hints": self.hints}.get(path)
             return None
 
         # ---- routes ---------------------------------------------------
@@ -208,6 +210,30 @@ def make_server(cfg: Config, port: int = 0) -> ThreadingHTTPServer:
         def draft_delete(self, path, query):
             delete_draft(cfg, path[len("/api/drafts/"):])
             self._send(204)
+
+        def layout(self, path, query):
+            self._json({"colors": {t: f"#{c:06x}" for t, c in TYPE_COLORS.items()},
+                        "default": f"#{DEFAULT_COLOR:06x}", "max_one_shot": MAX_ONE_SHOT})
+
+        def autofill(self, path, query):
+            body = self._body()
+            folder = body.get("folder") if isinstance(body, dict) else None
+            if not isinstance(folder, str):
+                raise ApiError(400, "folder must be a string")
+            prefix = folder + "/"
+            entries = [f for f in library.files.values()
+                       if not folder or f["folder"] == folder or f["folder"].startswith(prefix)]
+            if body.get("one_shots"):
+                entries = [f for f in entries if is_one_shot(f)]
+            self._json({"pads": {str(k): p for k, p in autofill(entries).items()}})
+
+        def hints(self, path, query):
+            body = self._body()
+            paths = body.get("paths") if isinstance(body, dict) else None
+            if not isinstance(paths, list):
+                raise ApiError(400, "paths must be a list")
+            self._json({p: library.files[p]["type_hint"] for p in paths
+                        if isinstance(p, str) and p in library.files})
 
         def export(self, path, query):
             body = self._body()

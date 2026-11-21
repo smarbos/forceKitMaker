@@ -23,7 +23,7 @@ HINTS: list[tuple[str, tuple[str, ...]]] = [
     ("kick", ("kick", "kik", "bd", "bassdrum")),
     ("snare", ("snare", "snr", "sd")),
     ("clap", ("clap", "clp", "cp")),
-    ("hat", ("hat", "hats", "hh", "hihat", "oh", "ch")),
+    ("hat", ("hat", "hats", "hh", "hihat", "oh", "ch", "chh", "ohh", "hhc", "hho")),
     ("tom", ("tom", "toms")),
     ("cymbal", ("cymbal", "cym", "cy", "crash", "ride", "china", "splash")),
     ("perc", ("perc", "percussion", "conga", "bongo", "shaker", "tamb", "tambourine", "cowbell", "rim",

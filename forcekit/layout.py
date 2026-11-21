@@ -29,7 +29,7 @@ DEFAULT_COLOR = 0x3CFF5A  # untyped / other sounds: the Force template's green f
 MAX_ONE_SHOT = 4.0  # seconds; longer files count as loops/phrases for the one-shot filter
 
 _SLOTTED = {opt.split(":")[0] for slot in SLOTS for opt in slot} - {"any"}
-_OPEN_TOKENS = {"open", "opn", "oh"}
+_OPEN_TOKENS = {"open", "opn", "oh", "ohh", "hho"}
 
 
 def color_for(type_hint: str | None) -> int:

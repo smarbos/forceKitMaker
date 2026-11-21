@@ -147,3 +147,44 @@ def test_export_colors_by_type(srv, cfg):
     assert status == 200
     pads = read_xpm(body["path"])[1]["data"]["programPads"]["pads"]
     assert pads["value0"] == 0xFF2A2A and pads["value1"] == 0xFFD21A
+
+
+def test_autofill_recursive(srv):
+    status, body = post_json(srv, "/api/autofill", {"folder": "", "one_shots": False})
+    assert status == 200
+    pads = body["pads"]
+    assert pads["0"] == "Drums/Kick 01.wav" and pads["2"] == "Drums/Snare 01.wav"
+    assert "Other/Kick 01.wav" not in pads.values() and "Old/corrupt.wav" not in pads.values()
+    _, body = post_json(srv, "/api/autofill", {"folder": "Drums", "one_shots": False})
+    assert body["pads"] and all(p.startswith("Drums/") for p in body["pads"].values())
+
+
+def test_autofill_one_shot_filter(cfg, library):
+    import numpy as np
+    sr = 44100
+    sf.write(library / "Drums/Long hit.wav", (0.3 * np.sin(np.arange(sr * 5) / 10)).astype(np.float32), sr)
+    scan_library(cfg)
+    server = make_server(cfg, port=0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        _, on = post_json(base, "/api/autofill", {"folder": "Drums", "one_shots": True})
+        _, off = post_json(base, "/api/autofill", {"folder": "Drums", "one_shots": False})
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert "Drums/Long hit.wav" not in on["pads"].values()
+    assert "Drums/Long hit.wav" in off["pads"].values()
+
+
+def test_layout_and_hints(srv):
+    layout = get_json(srv, "/api/layout")
+    assert layout["colors"]["kick"] == "#ff2a2a" and layout["default"] == "#3cff5a"
+    assert layout["max_one_shot"] == 4.0
+    status, hints = post_json(srv, "/api/hints", {"paths": ["Drums/Kick 01.wav", "nope.wav"]})
+    assert status == 200 and hints == {"Drums/Kick 01.wav": "kick"}
+
+
+def test_autofill_bad_request(srv):
+    assert post_json(srv, "/api/autofill", {"folder": 3})[0] == 400
+    assert post_json(srv, "/api/hints", {"paths": "x"})[0] == 400

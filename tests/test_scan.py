@@ -9,7 +9,7 @@ from forcekit.scan import scan_library, type_hint
 @pytest.mark.parametrize("path,hint", [
     ("Drums/Kick 01.wav", "kick"), ("x/BD_808.wav", "kick"), ("Yamaha/Snaredrums/s1.wav", "snare"),
     ("x/closedHat.wav", "hat"), ("x/Bass Drum 2.wav", "kick"), ("x/Sub Bass.wav", "bass"),
-    ("Drum loops/Funk 98bpm.wav", "loop"), ("x/random thing.wav", None)])
+    ("Drum loops/Funk 98bpm.wav", "loop"), ("808/CHH.wav", "hat"), ("808/OHH.wav", "hat"), ("x/random thing.wav", None)])
 def test_type_hint(path, hint):
     assert type_hint(path) == hint
 
