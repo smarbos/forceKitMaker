@@ -172,7 +172,17 @@ async function assign(entry, target) {
   if (!r.ok) { status("Couldn't read the note", true); return; }
   if (p.samples.some((s) => s.path === entry.path)) return;  // added twice in quick succession
   let root = r.body.root;
-  if (p.samples.some((s) => s.root === root)) {
+  let section = null;
+  if (isManual(p.samples)) {  // the new sample takes the free keys above, else the top half of the highest section
+    const top = p.samples.reduce((a, b) => (b.high > a.high ? b : a));
+    if (top.high < 127) section = { low: top.high + 1, high: 127 };
+    else if (top.low < top.high) {
+      const mid = Math.floor((top.low + top.high) / 2);
+      section = { low: mid + 1, high: top.high };
+      top.high = mid;
+    } else { status("No room: the top section is a single key — make it wider first", true); return; }
+    status(`${baseName(entry.path)}: ${noteName(section.low)}–${noteName(section.high)}, root ${noteName(root)}`);
+  } else if (p.samples.some((s) => s.root === root)) {
     status(`${noteName(root)} is already used — pick another note for ${baseName(entry.path)}`, true);
     const used = new Set(p.samples.map((s) => s.root));
     let free = root;
@@ -185,7 +195,7 @@ async function assign(entry, target) {
     const how = { filename: "from filename", detected: "detected", default: "unknown, set to C3" }[r.body.source];
     status(`${baseName(entry.path)}: ${noteName(root)} (${how})`);
   }
-  p.samples.push({ path: entry.path, root });
+  p.samples.push({ path: entry.path, root, ...section });
   renderProgram();
   scheduleSave();
 }
@@ -528,6 +538,18 @@ function renderKeyboard(samples, ranges) {
     b.title = `${baseName(samples[i].path)}: ${noteName(lo)}–${noteName(hi)}`;
     bands.append(b);
   });
+  if (ranges.length) {
+    const edges = [["start", noteLeft(ranges[0][0])], ["end", noteRight(ranges[ranges.length - 1][1])]];
+    for (let i = 0; i + 1 < ranges.length; i++) edges.push([String(i), noteLeft(ranges[i + 1][0])]);
+    for (const [edge, x] of edges) {
+      const h = el("div", "edge");
+      h.dataset.edge = edge;
+      h.style.left = x + "px";
+      h.title = "Drag to move this split (Shift: single keys)";
+      h.addEventListener("pointerdown", (e) => startEdgeDrag(e, edge));
+      bands.append(h);
+    }
+  }
   $("kb-octave").textContent = `Keys: ${noteName(base)}–${noteName(Math.min(base + 12, 127))}`;
   $("auto-split").hidden = !isManual(samples);
   const shown = state.stem || state.program.name;
@@ -536,6 +558,66 @@ function renderKeyboard(samples, ranges) {
     $("keyboard").scrollLeft = noteLeft(36);
   }
 }
+
+// the key under x (px from the keyboard's left edge); black keys sit on top
+function noteAt(x) {
+  for (let n = 0; n < 128; n++) if (isBlack(n) && noteLeft(n) <= x && x < noteRight(n)) return n;
+  for (let n = 0; n < 128; n++) if (!isBlack(n) && noteLeft(n) <= x && x < noteRight(n)) return n;
+  return x < 0 ? 0 : 127;
+}
+
+// first edit by hand: freeze the automatic split into explicit sections
+function makeManual(samples) {
+  if (isManual(samples)) return;
+  sections(samples).forEach(([lo, hi], i) => { samples[i].low = lo; samples[i].high = hi; });
+}
+
+const snapC = (n) => Math.round(n / 12) * 12;
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+// move one edge: "start" (bottom of the lowest section), "end" (top of the highest),
+// or "<i>" (the split between sections i and i+1). Snaps to C unless single = true.
+function moveEdge(samples, edge, note, single) {
+  makeManual(samples);
+  const last = samples.length - 1;
+  if (edge === "start") samples[0].low = clamp(single ? note : snapC(note), 0, samples[0].high);
+  else if (edge === "end") samples[last].high = clamp(single ? note : snapC(note + 1) - 1, samples[last].low, 127);
+  else {
+    const i = +edge;
+    const n = clamp(single ? note : snapC(note), samples[i].low + 1, samples[i + 1].high);
+    samples[i].high = n - 1; samples[i + 1].low = n;
+  }
+}
+
+function startEdgeDrag(e, edge) {
+  e.preventDefault();
+  const samples = state.program.samples;
+  const move = (ev) => {
+    const x = ev.clientX - $("keys").getBoundingClientRect().left;
+    moveEdge(samples, edge, noteAt(x), ev.shiftKey);
+    renderSynth();
+  };
+  const up = (ev) => {
+    move(ev);
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    scheduleSave();
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
+$("auto-split").addEventListener("click", () => {
+  const samples = state.program.samples;
+  const roots = samples.map((s) => s.root);
+  const dup = roots.find((r, i) => roots.indexOf(r) !== i);
+  if (dup !== undefined) {
+    status(`Two samples use root ${noteName(dup)} — change one before going back to the automatic split`, true);
+    return;
+  }
+  for (const s of samples) { delete s.low; delete s.high; }
+  renderSynth(); scheduleSave();
+});
 
 function renderSynth() {
   const samples = state.program.samples;
@@ -567,7 +649,12 @@ function renderSynth() {
     const [lo, hi] = ranges[i];
     const x = el("button", "clear", "×");
     x.type = "button"; x.title = "Remove";
-    x.addEventListener("click", () => { samples.splice(i, 1); renderSynth(); scheduleSave(); });
+    x.addEventListener("click", () => {
+      if (manual && samples.length > 1) {  // the neighbour below takes the keys (the one above for the lowest)
+        if (i > 0) samples[i - 1].high = s.high; else samples[1].low = s.low;
+      }
+      samples.splice(i, 1); renderSynth(); scheduleSave();
+    });
     row.append(sel, name, el("span", "range", `${noteName(lo)}–${noteName(hi)}`), x);
     list.append(row);
   });

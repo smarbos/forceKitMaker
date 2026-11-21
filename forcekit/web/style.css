@@ -133,6 +133,9 @@ button.wide { width: 100%; margin-bottom: 10px; padding: 7px; }
   color: #111; font-size: 10px; font-weight: 700; line-height: 22px; white-space: nowrap; text-overflow: ellipsis;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.35);
 }
+.edge { position: absolute; top: -2px; height: calc(100% + 4px); width: 10px; margin-left: -5px; cursor: ew-resize; z-index: 4; touch-action: none; }
+.edge::after { content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; background: #fff; border-radius: 1px; box-shadow: 0 0 0 1px #000; }
+.edge:hover::after { background: var(--accent); }
 .keys { position: relative; height: 92px; user-select: none; }
 .key { position: absolute; top: 0; cursor: pointer; border-radius: 0 0 3px 3px; }
 .key.white { width: 18px; height: 100%; background: linear-gradient(#e9e9ec, #cfcfd4); border: 1px solid #333; z-index: 1; }
