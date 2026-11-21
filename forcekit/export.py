@@ -43,7 +43,9 @@ def export_program(cfg: Config, draft: dict, normalize: bool = True, overwrite: 
     if is_drum:
         items = [(int(pad), rel) for pad, rel in sorted(draft["pads"].items(), key=lambda kv: int(kv[0]))]
     else:
-        items = [(s["root"], s["path"]) for s in sorted(draft["samples"], key=lambda s: s["root"])]
+        manual = any("low" in s for s in draft["samples"])  # hand-set key sections, else the automatic split
+        synth = sorted(draft["samples"], key=lambda s: s["low"] if manual else s["root"])
+        items = [(i, s["path"]) for i, s in enumerate(synth)]  # keyed by position: roots may repeat
     sources = [(key, _source(cfg, rel)) for key, rel in items]  # fails before anything is touched
 
     if is_drum:  # what the Force shows on each pad: the custom name, else the short auto name
@@ -68,8 +70,9 @@ def export_program(cfg: Config, draft: dict, normalize: bool = True, overwrite: 
         if is_drum:
             header, doc = build_drum(name, {key: ref for key, ref, _ in refs}, colors)
         else:
-            roots = [key for key, _, _ in refs]
-            zones = [(ref, root, low, high) for (root, ref, _), (low, high) in zip(refs, key_ranges(roots))]
+            ranges = ([(x["low"], x["high"]) for x in synth] if manual
+                      else key_ranges([x["root"] for x in synth]))
+            zones = [(ref, synth[i]["root"], *ranges[i]) for i, ref, _ in refs]
             header, doc = build_keygroup(name, zones)
         write_xpm(staging / xpm_path.name, header, doc)
         # Everything is built; only now replace the previous export.

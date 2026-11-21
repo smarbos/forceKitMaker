@@ -112,3 +112,15 @@ def test_export_uses_short_and_custom_names(cfg):
     assert inst[0]["layersv"][0]["sampleName"] == "Kick A"
     assert inst[1]["layersv"][0]["sampleName"] == "My Snare"
     assert sorted(p.name for p in (xpm.parent / "Named_[ProgramData]").iterdir()) == ["Kick A.wav", "My Snare.wav"]
+
+
+def test_export_synth_manual_sections(cfg):
+    draft = {"type": "synth", "name": "Split", "samples": [
+        {"path": "Synth/Lead_A3.aif", "root": 60, "low": 60, "high": 83},
+        {"path": "Synth/Lead_C3.wav", "root": 60, "low": 36, "high": 59}]}
+    xpm = export_program(cfg, draft)
+    ins = read_xpm(xpm)[1]["data"]["drum"]["instruments"]
+    assert [(i["lowNote"], i["highNote"], i["layersv"][0]["rootNote"]) for i in ins] == [(36, 59, 60), (60, 83, 60)]
+    assert [i["layersv"][0]["sampleFile"] for i in ins] == ["Lead_C3.wav", "Lead_A3.wav"]
+    pd = cfg.export_dir / "Synths/Split/Split_[ProgramData]"
+    assert sorted(p.name for p in pd.iterdir()) == ["Lead_A3.wav", "Lead_C3.wav"]

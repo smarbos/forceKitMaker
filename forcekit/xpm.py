@@ -81,7 +81,7 @@ def build_keygroup(name: str, zones: list[tuple[SampleRef, int, int, int]]) -> t
     data["name"] = name
     blank = data["drum"]["instruments"][0]
     instruments = []
-    for ref, root, low, high in sorted(zones, key=lambda z: z[1]):
+    for ref, root, low, high in sorted(zones, key=lambda z: z[2]):
         inst = copy.deepcopy(blank)
         inst["lowNote"], inst["highNote"] = low, high
         layer = inst["layersv"][0]
