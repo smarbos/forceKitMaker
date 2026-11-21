@@ -25,6 +25,10 @@ def _check_path(path: object) -> None:
         raise DraftError(f"invalid sample path: {path}")
 
 
+def _is_note(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 127
+
+
 def validate_draft(draft: dict) -> None:
     if not isinstance(draft, dict) or not isinstance(draft.get("name"), str):
         raise DraftError("draft needs a name")
@@ -57,11 +61,23 @@ def validate_draft(draft: dict) -> None:
         for s in samples:
             _check_path(s.get("path") if isinstance(s, dict) else None)
             root = s.get("root")
-            if not isinstance(root, int) or not 0 <= root <= 127:
+            if not _is_note(root):
                 raise DraftError(f"invalid root note: {root}")
-            if root in roots:
-                raise DraftError(f"two samples share root note {root}")
             roots.add(root)
+        manual = [("low" in s or "high" in s) for s in samples]
+        if any(manual):  # hand-set sections: all samples have one, no overlaps; roots may repeat
+            if not all(manual):
+                raise DraftError("either every sample has a key section or none does")
+            previous = -1
+            for s in sorted(samples, key=lambda s: s.get("low") if _is_note(s.get("low")) else -1):
+                low, high = s.get("low"), s.get("high")
+                if not (_is_note(low) and _is_note(high) and low <= high):
+                    raise DraftError(f"invalid key section: {low}–{high}")
+                if low <= previous:
+                    raise DraftError("key sections overlap")
+                previous = high
+        elif len(roots) < len(samples):
+            raise DraftError("two samples share a root note")
     else:
         raise DraftError(f"unknown program type: {kind}")
 

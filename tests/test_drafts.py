@@ -36,3 +36,28 @@ def test_validate_names_and_colors():
                 dict(ok, colors={"0": "red"}), dict(ok, colors={"64": "#ff0000"}), dict(ok, names=[])]:
         with pytest.raises(DraftError):
             validate_draft(bad)
+
+
+def _synth(*samples):
+    return {"type": "synth", "name": "a", "samples": list(samples)}
+
+
+def test_synth_manual_sections_valid():
+    validate_draft(_synth({"path": "a.wav", "root": 48, "low": 36, "high": 59},
+                          {"path": "b.wav", "root": 48, "low": 60, "high": 83}))
+
+
+def test_synth_sections_all_or_none():
+    with pytest.raises(DraftError):
+        validate_draft(_synth({"path": "a.wav", "root": 48, "low": 36, "high": 59},
+                              {"path": "b.wav", "root": 60}))
+
+
+@pytest.mark.parametrize("a,b", [
+    ((60, 59), (70, 80)), ((-1, 10), (20, 30)), ((0, 10), (20, 128)), (("36", 40), (50, 60)),
+    ((36, 60), (60, 83)), ((10, 60), (20, 30)), ((True, 10), (20, 30)),
+])
+def test_synth_sections_bad(a, b):
+    with pytest.raises(DraftError):
+        validate_draft(_synth({"path": "a.wav", "root": 48, "low": a[0], "high": a[1]},
+                              {"path": "b.wav", "root": 50, "low": b[0], "high": b[1]}))
