@@ -129,6 +129,13 @@ $("delete-draft").addEventListener("click", async () => {
   status("Draft deleted");
 });
 
+$("new-program").addEventListener("click", async () => {
+  await flushSave();
+  newProgram(state.program.type);
+  await saveDraft();  // saved right away so it shows in the drafts list
+  status("New " + (state.program.type === "drum" ? "kit" : "synth") + " created: " + state.program.name);
+});
+
 $("type-drum").addEventListener("click", async () => {
   if (state.program.type !== "drum") { await flushSave(); newProgram("drum"); }
 });
