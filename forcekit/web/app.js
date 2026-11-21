@@ -154,6 +154,7 @@ async function assign(entry, target) {
     state.pad = Math.min(pad + 1, 63);
     state.bank = Math.floor(state.pad / 16);
     renderProgram();
+    flashPad(pad);
     scheduleSave();
     return;
   }
@@ -222,6 +223,7 @@ function renderPads() {
       const idx = state.bank * 16 + row * 4 + col;
       const path = state.program.pads[String(idx)];
       const pad = el("div", "pad" + (path ? " filled" : "") + (idx === state.pad ? " selected" : ""));
+      pad.dataset.idx = idx;
       pad.append(el("span", "label", BANKS[state.bank] + String(row * 4 + col + 1).padStart(2, "0")));
       pad.append(el("span", "sample", path ? baseName(path).replace(/\.[^.]+$/, "") : ""));
       if (path) {
@@ -235,7 +237,7 @@ function renderPads() {
         });
         pad.append(x);
       }
-      pad.addEventListener("click", () => { state.pad = idx; renderPads(); if (path) play(path); });
+      pad.addEventListener("click", () => { state.pad = idx; renderPads(); if (path) { play(path); flashPad(idx); } });
       pad.addEventListener("dragover", (e) => { e.preventDefault(); pad.classList.add("drop"); });
       pad.addEventListener("dragleave", () => pad.classList.remove("drop"));
       pad.addEventListener("drop", (e) => {
@@ -247,6 +249,14 @@ function renderPads() {
       grid.append(pad);
     }
   }
+}
+
+// Light a pad up briefly, like hitting it on the device.
+function flashPad(idx) {
+  const pad = $("pads").querySelector(`[data-idx="${idx}"]`);
+  if (!pad) return;
+  pad.classList.add("hit");
+  setTimeout(() => pad.classList.remove("hit"), 160);
 }
 
 function renderSynth() {
