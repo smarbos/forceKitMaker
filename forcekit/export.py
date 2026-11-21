@@ -8,7 +8,7 @@ from pathlib import Path
 from .audio import detect_bounds, export_subtype, force_copyable, gain_to, load, peak, probe, write_wav
 from .config import Config
 from .drafts import DraftError, validate_draft
-from .names import key_ranges, safe_name, unique_name
+from .names import auto_names, key_ranges, safe_name, unique_name
 from .xpm import SampleRef, build_drum, build_keygroup, write_xpm
 
 TARGET_PEAK_DB = -1.0
@@ -46,10 +46,16 @@ def export_program(cfg: Config, draft: dict, normalize: bool = True, overwrite: 
         items = [(s["root"], s["path"]) for s in sorted(draft["samples"], key=lambda s: s["root"])]
     sources = [(key, _source(cfg, rel)) for key, rel in items]  # fails before anything is touched
 
+    if is_drum:  # what the Force shows on each pad: the custom name, else the short auto name
+        custom = draft.get("names", {})
+        auto = auto_names({key: rel for key, rel in items})
+        labels = {key: (custom.get(str(key), "").strip() or auto[key]) for key, _ in items}
+    else:
+        labels = {key: src.stem for key, src in sources}
     taken: set[str] = set()
     refs: list[tuple[int, SampleRef, Path]] = []
     for key, src in sources:
-        sample_name = unique_name(safe_name(src.stem), taken)
+        sample_name = unique_name(safe_name(labels[key]), taken)
         refs.append((key, SampleRef(sample_name, f"{sample_name}.wav"), src))
 
     type_dir.mkdir(parents=True, exist_ok=True)

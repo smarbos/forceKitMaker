@@ -64,7 +64,7 @@ def test_failed_overwrite_keeps_previous_export(cfg):
     (cfg.library / "Drums/Snare 01.wav").unlink()
     with pytest.raises(DraftError):
         export_program(cfg, draft, overwrite=True)
-    assert xpm.exists() and (cfg.export_dir / "Drums/Keep/Keep_[ProgramData]/Snare 01.wav").exists()
+    assert xpm.exists() and (cfg.export_dir / "Drums/Keep/Keep_[ProgramData]/Snare.wav").exists()
 
 
 def test_failed_export_leaves_nothing_behind(cfg):
@@ -98,3 +98,17 @@ def test_dot_dot_name_does_not_touch_other_exports(cfg):
     keep = export_program(cfg, {"type": "drum", "name": "Keep", "pads": {"0": "Drums/Kick 01.wav"}})
     out = export_program(cfg, {"type": "drum", "name": "..", "pads": {"0": "Drums/Kick 01.wav"}}, overwrite=True)
     assert keep.is_file() and out.parent.name == "untitled"
+
+
+def test_export_uses_short_and_custom_names(cfg):
+    import shutil
+    for n in ("PACK_Kick_A", "PACK_Snare_B"):
+        shutil.copy(cfg.library / "Drums/Kick 01.wav", cfg.library / f"Drums/{n}.wav")
+    draft = {"type": "drum", "name": "Named", "names": {"1": "My Snare"},
+             "pads": {"0": "Drums/PACK_Kick_A.wav", "1": "Drums/PACK_Snare_B.wav"}}
+    xpm = export_program(cfg, draft)
+    _, doc = read_xpm(xpm)
+    inst = doc["data"]["drum"]["instruments"]
+    assert inst[0]["layersv"][0]["sampleName"] == "Kick A"
+    assert inst[1]["layersv"][0]["sampleName"] == "My Snare"
+    assert sorted(p.name for p in (xpm.parent / "Named_[ProgramData]").iterdir()) == ["Kick A.wav", "My Snare.wav"]

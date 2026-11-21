@@ -38,3 +38,24 @@ def test_safe_name_never_yields_dot_names():
     from forcekit.names import safe_name
     assert safe_name("..") == "untitled" and safe_name(".") == "untitled"
     assert safe_name(".hidden kit") == "hidden kit"
+
+
+def test_auto_names_strip_shared_words():
+    from forcekit.names import auto_names
+    pads = {0: "p/DRUMBOII_KICK_808.wav", 1: "p/DRUMBOII_SNARE_BASIC.wav", 2: "p/DRUMBOII_HAT_OPEN.wav"}
+    assert auto_names(pads) == {0: "KICK 808", 1: "SNARE BASIC", 2: "HAT OPEN"}
+
+
+def test_auto_names_suffix_and_keep_one_word():
+    from forcekit.names import auto_names
+    assert auto_names({0: "a/Kick-Pack.wav", 1: "a/Snare-Pack.wav"}) == {0: "Kick", 1: "Snare"}
+    # everything shared except nothing: each keeps at least one word
+    assert auto_names({0: "a/Pack Kick.wav", 1: "b/Pack Kick.wav", 2: "c/Pack.wav"}) == {
+        0: "Pack Kick", 1: "Pack Kick", 2: "Pack"}
+
+
+def test_auto_names_nothing_shared_or_single():
+    from forcekit.names import auto_names
+    assert auto_names({0: "v/voice_badboy.wav", 1: "v/lovely.wav"}) == {0: "voice badboy", 1: "lovely"}
+    assert auto_names({5: "x/DRUMBOII_KICK_808.wav"}) == {5: "DRUMBOII KICK 808"}
+    assert auto_names({}) == {}

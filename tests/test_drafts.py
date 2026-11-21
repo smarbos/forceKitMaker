@@ -26,3 +26,13 @@ def test_draft_crud(cfg):
 def test_load_draft_cannot_escape(cfg):
     with pytest.raises(DraftError):
         load_draft(cfg, "../../etc/passwd")
+
+
+def test_validate_names_and_colors():
+    from forcekit.drafts import DraftError, validate_draft
+    ok = {"type": "drum", "name": "K", "pads": {"0": "a.wav"}, "names": {"0": "Big Kick"}, "colors": {"0": "#ff0000"}}
+    validate_draft(ok)
+    for bad in [dict(ok, names={"99": "x"}), dict(ok, names={"0": 3}), dict(ok, names={"0": "x" * 65}),
+                dict(ok, colors={"0": "red"}), dict(ok, colors={"64": "#ff0000"}), dict(ok, names=[])]:
+        with pytest.raises(DraftError):
+            validate_draft(bad)

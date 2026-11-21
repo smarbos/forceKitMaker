@@ -1,6 +1,7 @@
 """Note names, key ranges and filename helpers. MIDI 60 = C3 (Akai convention)."""
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
 
@@ -62,3 +63,25 @@ def unique_name(name: str, taken: set[str]) -> str:
 def natural_key(text: str) -> list:
     """Sort key that orders "Kick 2" before "Kick 10"."""
     return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", text)]
+
+
+_WORD_SPLIT = re.compile(r"[_\-\s.]+")
+
+
+def auto_names(pads: dict) -> dict:
+    """Short pad names: file stems as words, minus the words every sample in the kit shares.
+
+    "DRUMBOII_KICK_808" and "DRUMBOII_SNARE_BASIC" become "KICK 808" and "SNARE BASIC".
+    Words are only removed from the start and end, and every name keeps at least one word.
+    """
+    words = {k: [w for w in _WORD_SPLIT.split(os.path.splitext(p.rsplit("/", 1)[-1])[0]) if w] or [p]
+             for k, p in pads.items()}
+    lists = list(words.values())
+    pre = suf = 0
+    if len({tuple(w.lower() for w in ws) for ws in lists}) > 1:
+        shortest = min(len(ws) for ws in lists)
+        while pre < shortest - 1 and len({ws[pre].lower() for ws in lists}) == 1:
+            pre += 1
+        while suf < shortest - pre - 1 and len({ws[-1 - suf].lower() for ws in lists}) == 1:
+            suf += 1
+    return {k: " ".join(ws[pre:len(ws) - suf]) for k, ws in words.items()}

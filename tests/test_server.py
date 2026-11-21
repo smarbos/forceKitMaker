@@ -260,3 +260,18 @@ def test_cross_site_requests_refused(srv):
     assert post({"Content-Type": "application/json", "Origin": "https://evil.example"}) == 403
     assert post({"Content-Type": "application/json", "Host": "evil.example:80"}) == 403
     assert post({"Content-Type": "application/json", "Origin": srv}) == 200
+
+
+def test_custom_colors_override_type(srv):
+    from forcekit.xpm import read_xpm
+    d = {"type": "drum", "name": "Custom", "pads": {"0": "Drums/Kick 01.wav", "1": "Drums/Snare 01.wav"},
+         "colors": {"1": "#123456"}}
+    status, body = post_json(srv, "/api/export", {"draft": d, "normalize": True, "overwrite": False})
+    pads = read_xpm(body["path"])[1]["data"]["programPads"]["pads"]
+    assert pads["value0"] == 0xFF0000 and pads["value1"] == 0x123456
+
+
+def test_padnames_api(srv):
+    status, body = post_json(srv, "/api/padnames", {"pads": {"0": "x/AB_Kick.wav", "3": "y/AB_Snare.wav"}})
+    assert status == 200 and body == {"0": "Kick", "3": "Snare"}
+    assert post_json(srv, "/api/padnames", {"pads": []})[0] == 400

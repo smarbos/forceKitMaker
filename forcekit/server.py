@@ -15,7 +15,7 @@ from .drafts import DraftError, delete_draft, list_drafts, load_draft, save_draf
 from .export import ExportExists, export_program
 from .send import ForceError, SendExists, send_program, test_connection
 from .layout import DEFAULT_COLOR, MAX_ONE_SHOT, TYPE_COLORS, autofill, color_for, is_one_shot
-from .names import natural_key, safe_name, unique_name
+from .names import auto_names, natural_key, safe_name, unique_name
 
 WEB_DIR = Path(__file__).parent / "web"
 DEFAULT_ROOT = 60
@@ -157,6 +157,7 @@ def make_server(cfg: Config, port: int = 0) -> ThreadingHTTPServer:
                 return self.settings_put
             if method == "POST":
                 return {"/api/export": self.export, "/api/autofill": self.autofill, "/api/hints": self.hints,
+                        "/api/padnames": self.padnames,
                         "/api/send": self.send, "/api/settings/test": self.settings_test}.get(path)
             return None
 
@@ -253,6 +254,13 @@ def make_server(cfg: Config, port: int = 0) -> ThreadingHTTPServer:
                                  {d["stem"] for d in list_drafts(cfg)})
             self._json({"pads": {str(k): p for k, p in autofill(entries).items()}, "name": name})
 
+        def padnames(self, path, query):
+            body = self._body()
+            pads = body.get("pads") if isinstance(body, dict) else None
+            if not isinstance(pads, dict) or not all(isinstance(p, str) for p in pads.values()):
+                raise ApiError(400, "pads must be an object of paths")
+            self._json(auto_names(pads))
+
         def hints(self, path, query):
             body = self._body()
             paths = body.get("paths") if isinstance(body, dict) else None
@@ -267,6 +275,10 @@ def make_server(cfg: Config, port: int = 0) -> ThreadingHTTPServer:
             if isinstance(draft, dict) and draft.get("type") == "drum" and isinstance(draft.get("pads"), dict):
                 colors = {int(k): color_for(library.files.get(p, {}).get("type_hint"))
                           for k, p in draft["pads"].items() if str(k).isdigit() and isinstance(p, str)}
+                custom = draft.get("colors")
+                if isinstance(custom, dict):  # colors picked by hand win over the type color
+                    colors.update({int(k): int(v[1:], 16) for k, v in custom.items()
+                                   if str(k).isdigit() and isinstance(v, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", v)})
             try:
                 return export_program(cfg, draft, normalize=bool(body.get("normalize", True)),
                                       overwrite=overwrite, colors=colors)

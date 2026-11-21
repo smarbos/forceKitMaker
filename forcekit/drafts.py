@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path, PurePosixPath
 
 from .config import Config
 from .names import safe_name
 
 DRUM_PADS = 64
+MAX_PAD_NAME = 64
 MAX_SYNTH_SAMPLES = 128
 
 
@@ -35,6 +37,18 @@ def validate_draft(draft: dict) -> None:
             if not (isinstance(key, str) and key.isdigit() and 0 <= int(key) < DRUM_PADS):
                 raise DraftError(f"invalid pad: {key}")
             _check_path(path)
+        names, colors = draft.get("names", {}), draft.get("colors", {})
+        if not isinstance(names, dict) or not isinstance(colors, dict):
+            raise DraftError("names and colors must be objects")
+        for key, value in [*names.items(), *colors.items()]:
+            if not (isinstance(key, str) and key.isdigit() and 0 <= int(key) < DRUM_PADS):
+                raise DraftError(f"invalid pad: {key}")
+        for value in names.values():
+            if not isinstance(value, str) or len(value) > MAX_PAD_NAME:
+                raise DraftError(f"a pad name is text of at most {MAX_PAD_NAME} characters")
+        for value in colors.values():
+            if not (isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value)):
+                raise DraftError(f"invalid pad color: {value}")
     elif kind == "synth":
         samples = draft.get("samples", [])
         if not isinstance(samples, list) or len(samples) > MAX_SYNTH_SAMPLES:
