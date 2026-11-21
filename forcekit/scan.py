@@ -98,6 +98,17 @@ def _describe(args: tuple[str, str]) -> dict:
     return entry
 
 
+# Shorter than this is a stub (e.g. a 46-byte WAV with one sample), not a usable sound.
+MIN_DURATION = 0.001
+
+
+def _flag_empty(entry: dict) -> None:
+    """Mark near-empty files as errors; runs on reused entries too, so old indexes get fixed."""
+    d = entry.get("duration")
+    if not entry["error"] and d is not None and d < MIN_DURATION:
+        entry["error"] = "empty file: less than 1 ms of audio"
+
+
 def _walk(cfg: Config) -> list[str]:
     root = cfg.library.resolve()
     skip_dirs = {cfg.data_dir.resolve(), cfg.export_dir.resolve()}
@@ -170,6 +181,7 @@ def scan_library(cfg: Config, progress: Callable[[int, int], None] | None = None
     files = []
     for rel in paths:
         entry = entries[rel]
+        _flag_empty(entry)
         first = first_by_hash.setdefault(entry["hash"], rel)
         entry["dup_of"] = None if first == rel else first
         files.append(entry)

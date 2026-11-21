@@ -60,3 +60,14 @@ def test_scan_survives_unreadable_files(library, tmp_path):
     bad = [f for f in idx["files"] if f["path"].startswith("Drums/caf")]
     assert len(bad) == 1 and "UTF-8" in bad[0]["error"]
     assert by["Drums/Kick 01.wav"]["error"] is None
+
+
+def test_near_empty_files_are_flagged(library, tmp_path):
+    import numpy as np
+    import soundfile as sf
+    sf.write(library / "Drums/stub.wav", np.zeros(1, dtype=np.float32), 48000, subtype="PCM_16")
+    cfg = Config(library=library, data_dir=tmp_path / "d", export_dir=tmp_path / "o")
+    for _ in range(2):  # fresh scan, then a re-scan that reuses the entry
+        by = {f["path"]: f for f in scan_library(cfg)["files"]}
+        assert "empty" in by["Drums/stub.wav"]["error"]
+        assert by["Drums/Hats/HH closed.wav"]["error"] is None
