@@ -17,7 +17,7 @@ const baseName = (path) => path.split("/").pop();
 
 const state = {
   tree: null, expanded: new Set([""]), folder: null, files: [], visible: [], selected: -1,
-  program: null, stem: null, bank: 0, pad: 0, saveTimer: null, folderSeq: 0,
+  program: null, stem: null, pad: 0, saveTimer: null, folderSeq: 0,
   layout: { colors: {}, default: "#3cff5a", max_one_shot: 4 },
   hints: new Map(),  // library path → type hint (null = untyped); filled from listings and /api/hints
 };
@@ -63,7 +63,7 @@ function newProgram(type) {
   state.program = type === "drum"
     ? { type: "drum", name: "Kit " + stamp(), pads: {} }
     : { type: "synth", name: "Synth " + stamp(), samples: [] };
-  state.stem = null; state.bank = 0; state.pad = 0;
+  state.stem = null; state.pad = 0;
   renderProgram();
 }
 
@@ -121,7 +121,7 @@ $("drafts").addEventListener("change", async (e) => {
   state.program = r.body;
   if (state.program.type === "drum") state.program.pads = state.program.pads || {};
   else state.program.samples = state.program.samples || [];
-  state.stem = stem; state.bank = 0; state.pad = 0;
+  state.stem = stem; state.pad = 0;
   renderProgram();
   status("Opened " + r.body.name);
 });
@@ -158,7 +158,6 @@ async function assign(entry, target) {
     const pad = target != null ? target : state.pad;
     p.pads[String(pad)] = entry.path;
     state.pad = Math.min(pad + 1, 63);
-    state.bank = Math.floor(state.pad / 16);
     renderProgram();
     flashPad(pad);
     scheduleSave();
@@ -216,6 +215,33 @@ function renderProgram() {
 function padColor(path) {
   const hint = state.hints.get(path);
   return (hint && state.layout.colors[hint]) || state.layout.default;
+}
+
+// The selected pad, spelled out under the grid, with its actions.
+function renderPadInfo() {
+  const box = $("pad-info");
+  box.textContent = "";
+  const idx = state.pad;
+  const path = state.program.pads[String(idx)];
+  const hint = path ? state.hints.get(path) : null;
+  box.append(el("strong", "", padLabel(idx)));
+  box.append(el("span", "muted", path ? ` · ${hint || "untyped"} · ` : " · empty — double-click, Enter or drag a sample here"));
+  if (!path) return;
+  const name = el("span", "info-name", baseName(path));
+  name.title = path;
+  box.append(name);
+  const actions = el("span", "info-actions");
+  for (const [label, fn, tip] of [
+    ["◀", () => stepPad(-1), "Previous sound of this type ([)"],
+    ["▶", () => stepPad(1), "Next sound of this type (])"],
+    ["Clear", () => { delete state.program.pads[String(idx)]; renderPads(); scheduleSave(); }, "Remove the sample from this pad"],
+  ]) {
+    const b = el("button", "", label);
+    b.type = "button"; b.title = tip;
+    b.addEventListener("click", fn);
+    actions.append(b);
+  }
+  box.append(actions);
 }
 
 // Look up type hints for pad samples we haven't seen in a listing (e.g. after opening a draft).
@@ -289,56 +315,33 @@ async function autofillKit() {
     program.name = `${base} ${n}`;
   }
   state.program = program;
-  state.bank = 0; state.pad = 0;
+  state.pad = 0;
   renderProgram();
   loadDraftList();
   status(`Auto-filled ${count} pads from ${folder || "the whole library"}`);
 }
 $("autofill").addEventListener("click", autofillKit);
 
+// The Force's 8×8 grid: bank A bottom-left, B bottom-right, C top-left, D top-right;
+// within each bank pad 1 is bottom-left and pad 16 top-right.
+const padLabel = (idx) => BANKS[Math.floor(idx / 16)] + String(idx % 16 + 1).padStart(2, "0");
+
 function renderPads() {
-  const banks = $("banks");
-  banks.textContent = "";
-  BANKS.forEach((b, i) => {
-    const used = Object.keys(state.program.pads).some((k) => Math.floor(+k / 16) === i);
-    const btn = el("button", state.bank === i ? "on" : "", b + (used ? " •" : ""));
-    btn.type = "button";
-    btn.addEventListener("click", () => { state.bank = i; renderPads(); });
-    banks.append(btn);
-  });
   const grid = $("pads");
   grid.textContent = "";
-  // Force/MPC layout: pad 1 bottom-left, pad 16 top-right.
-  for (const row of [3, 2, 1, 0]) {
-    for (let col = 0; col < 4; col++) {
-      const idx = state.bank * 16 + row * 4 + col;
+  for (let r = 0; r < 8; r++) {        // r = 0 is the top row
+    for (let c = 0; c < 8; c++) {
+      const bank = (r < 4 ? 2 : 0) + (c < 4 ? 0 : 1);  // C D over A B
+      const idx = bank * 16 + (3 - (r % 4)) * 4 + (c % 4);
       const path = state.program.pads[String(idx)];
       const pad = el("div", "pad" + (path ? " filled" : "") + (idx === state.pad ? " selected" : ""));
       pad.dataset.idx = idx;
+      pad.style.gridColumn = String(c < 4 ? c + 1 : c + 2);  // column/row 5 is the gap between banks
+      pad.style.gridRow = String(r < 4 ? r + 1 : r + 2);
       if (path) pad.style.setProperty("--pad-color", padColor(path));
-      pad.append(el("span", "label", BANKS[state.bank] + String(row * 4 + col + 1).padStart(2, "0")));
+      pad.append(el("span", "label", padLabel(idx)));
       pad.append(el("span", "sample", path ? baseName(path).replace(/\.[^.]+$/, "") : ""));
-      if (path) {
-        pad.title = path;
-        const x = el("button", "clear", "×");
-        x.type = "button"; x.title = "Clear pad";
-        x.addEventListener("click", (e) => {
-          e.stopPropagation();
-          delete state.program.pads[String(idx)];
-          renderPads(); scheduleSave();
-        });
-        pad.append(x);
-        if (idx === state.pad) {
-          const step = el("span", "step");
-          for (const [label, dir, tip] of [["◀", -1, "Previous sound of this type ([)"], ["▶", 1, "Next sound of this type (])"]]) {
-            const s = el("button", "", label);
-            s.type = "button"; s.title = tip;
-            s.addEventListener("click", (e) => { e.stopPropagation(); stepPad(dir); });
-            step.append(s);
-          }
-          pad.append(step);
-        }
-      }
+      if (path) pad.title = `${padLabel(idx)} · ${path}`;
       pad.addEventListener("click", () => { state.pad = idx; renderPads(); if (path) { play(path); flashPad(idx); } });
       pad.addEventListener("dragover", (e) => { e.preventDefault(); pad.classList.add("drop"); });
       pad.addEventListener("dragleave", () => pad.classList.remove("drop"));
@@ -351,6 +354,7 @@ function renderPads() {
       grid.append(pad);
     }
   }
+  renderPadInfo();
   ensureHints();
 }
 

@@ -40,7 +40,7 @@ input[type=checkbox] { accent-color: var(--accent); }
 .status { color: var(--muted); font-size: 12px; }
 .status.error { color: #ff4d4d; }
 
-.cols { flex: 1; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(320px, 1.6fr) minmax(400px, 1.4fr); gap: 6px; padding: 6px; min-height: 0; }
+.cols { flex: 1; display: grid; grid-template-columns: minmax(200px, .9fr) minmax(300px, 1.3fr) minmax(540px, 1.9fr); gap: 6px; padding: 6px; min-height: 0; }
 .col { display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; min-height: 0; }
 .col:last-child { overflow-y: auto; }
 .col::before {  /* section title, Force-style small caps */
@@ -76,14 +76,14 @@ input[type=checkbox] { accent-color: var(--accent); }
 
 /* pads */
 #drum-panel { background: #0e0e10; border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
-.banks { margin-bottom: 10px; display: flex; }
-.banks button { flex: 1; }
-.pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+/* 8×8 like the Force; the 5th column/row is the gap between banks */
+.pads { display: grid; grid-template-columns: repeat(4, 1fr) 6px repeat(4, 1fr);
+        grid-template-rows: repeat(4, auto) 6px repeat(4, auto); gap: 5px; }
 .pad {
-  position: relative; aspect-ratio: 1; min-width: 0; padding: 7px; cursor: pointer;
+  position: relative; aspect-ratio: 1.45; min-width: 0; padding: 3px 5px; cursor: pointer; overflow: hidden;
   display: flex; flex-direction: column; justify-content: space-between;
   background: linear-gradient(160deg, #2b2b2f, var(--pad) 55%, #1b1b1e);
-  border: 2px solid #111; border-radius: 7px;
+  border: 2px solid #111; border-radius: 5px;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 2px 3px rgba(0,0,0,.6);
   transition: box-shadow .12s, background .12s;
 }
@@ -100,12 +100,14 @@ input[type=checkbox] { accent-color: var(--accent); }
 .pad.hit .label, .pad.hit .sample { color: #111; }
 .pad.selected { outline: 2px solid #fff; outline-offset: 2px; }
 .pad.drop { outline: 2px dashed var(--accent); outline-offset: 2px; }
-.pad .label { font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+.pad .label { font-size: 8px; font-weight: 700; letter-spacing: .06em; color: var(--muted); }
 .pad.filled .label { color: color-mix(in srgb, var(--pc) 60%, #fff); }
-.pad .step { position: absolute; bottom: 3px; right: 3px; display: flex; gap: 2px; }
-.pad .step button { padding: 0 5px; font-size: 10px; line-height: 16px; background: rgba(0,0,0,.45); border-color: transparent; }
 button.wide { width: 100%; margin-bottom: 10px; padding: 7px; }
-.pad .sample { font-size: 11px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; }
+.pad .sample { font-size: 9px; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }
+.pad-info { display: flex; gap: 6px; align-items: center; min-height: 30px; margin-top: 10px; font-size: 12px; flex-wrap: wrap; }
+.pad-info .info-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.pad-info .info-actions { display: flex; gap: 4px; margin-left: auto; }
+.pad-info button { padding: 2px 8px; }
 .pad .clear, .synth-row .clear {
   position: absolute; top: 2px; right: 3px; border: 0; background: none; padding: 0 4px;
   color: var(--muted); font-size: 14px; text-transform: none;
@@ -139,3 +141,6 @@ button.wide { width: 100%; margin-bottom: 10px; padding: 7px; }
 .settings-grid input { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--text); }
 #settings-result.ok { color: var(--lit); }
 #settings-result.error { color: #ff4d4d; }
+
+/* elements toggled with the hidden attribute must stay hidden even when a rule sets display */
+[hidden] { display: none !important; }
