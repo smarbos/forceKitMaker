@@ -34,3 +34,11 @@ def test_rescan_reuses_unchanged(library, tmp_path, monkeypatch):
     monkeypatch.setattr("forcekit.scan.probe", lambda p: calls.append(p) or pytest.fail("re-probed"))
     scan_library(cfg)
     assert calls == []
+
+
+def test_rescan_of_other_library_ignores_old_index(library, tmp_path):
+    data = tmp_path / "d"
+    scan_library(Config(library=library, data_dir=data, export_dir=tmp_path / "o"))
+    idx = scan_library(Config(library=library / "Synth", data_dir=data, export_dir=tmp_path / "o"))
+    assert sorted(f["path"] for f in idx["files"]) == ["Lead_A3.aif", "Lead_C3.wav"]
+    assert all(f["folder"] == "" for f in idx["files"])
