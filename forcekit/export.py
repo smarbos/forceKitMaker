@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
-from .audio import export_subtype, force_copyable, gain_to, load, peak, probe, write_wav
+from .audio import detect_bounds, export_subtype, force_copyable, gain_to, load, peak, probe, write_wav
 from .config import Config
 from .drafts import DraftError, validate_draft
 from .names import key_ranges, safe_name, unique_name
@@ -55,7 +56,7 @@ def export_program(cfg: Config, draft: dict, normalize: bool = True, overwrite: 
     staged_data = staging / data_dir.name
     staged_data.mkdir(parents=True)
     try:
-        _write_samples(refs, staged_data, normalize, is_drum)
+        refs = _write_samples(refs, staged_data, normalize, is_drum)
         if is_drum:
             header, doc = build_drum(name, {key: ref for key, ref, _ in refs})
         else:
@@ -73,17 +74,23 @@ def export_program(cfg: Config, draft: dict, normalize: bool = True, overwrite: 
     return xpm_path
 
 
-def _write_samples(refs: list[tuple[int, SampleRef, Path]], dest_dir: Path, normalize: bool, is_drum: bool) -> None:
+def _write_samples(refs: list[tuple[int, SampleRef, Path]], dest_dir: Path, normalize: bool,
+                   is_drum: bool) -> list[tuple[int, SampleRef, Path]]:
+    """Write each sample; return refs with playback start/end detected from the written audio."""
     shared_gain = 1.0
     if normalize and not is_drum and refs:
         shared_gain = gain_to(TARGET_PEAK_DB, max(peak(load(src)[0]) for _, _, src in refs))
-    for _, ref, src in refs:
+    done = []
+    for key, ref, src in refs:
         dest = dest_dir / ref.file
         info = probe(src)
+        audio, sr, subtype = load(src)
         if not normalize and force_copyable(info.format, info.subtype):
             shutil.copyfile(src, dest)
-            continue
-        audio, sr, subtype = load(src)
-        if normalize:
-            audio = audio * (gain_to(TARGET_PEAK_DB, peak(audio)) if is_drum else shared_gain)
-        write_wav(dest, audio, sr, export_subtype(subtype))
+        else:
+            if normalize:
+                audio = audio * (gain_to(TARGET_PEAK_DB, peak(audio)) if is_drum else shared_gain)
+            write_wav(dest, audio, sr, export_subtype(subtype))
+        start, end = detect_bounds(audio, sr)
+        done.append((key, replace(ref, start=start, end=end), src))
+    return done

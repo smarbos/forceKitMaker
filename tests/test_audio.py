@@ -38,3 +38,21 @@ def test_detect_root(library):
     assert detect_root(library / "Synth/Lead_C3.wav") == 60
     assert detect_root(library / "Synth/Lead_A3.aif") == 69
     assert detect_root(library / "Drums/Snare 01.wav") is None
+
+
+def test_detect_bounds_trims_silence():
+    import numpy as np
+    from forcekit.audio import detect_bounds
+    sr = 44100
+    tone = 0.5 * np.sin(2 * np.pi * 440 * np.arange(4410) / sr)
+    data = np.concatenate([np.zeros(4410), tone, np.zeros(8820)]).astype(np.float32)[:, None]
+    start, end = detect_bounds(data, sr)
+    assert start == 4411 - 44 and abs(end - (8819 + 441)) <= 1
+
+
+def test_detect_bounds_silent_or_full():
+    import numpy as np
+    from forcekit.audio import detect_bounds
+    assert detect_bounds(np.zeros((500, 2), dtype=np.float32), 44100) == (0, 499)
+    full = np.ones((300, 1), dtype=np.float32)
+    assert detect_bounds(full, 44100) == (0, 299)

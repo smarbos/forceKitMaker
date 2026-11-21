@@ -20,6 +20,8 @@ DRUM_PADS = 64
 class SampleRef:
     name: str  # shown on the Force
     file: str  # filename inside <Program>_[ProgramData]/
+    start: int = 0  # first frame played (layer sliceInfo.Start)
+    end: int = 0  # last frame played, inclusive (layer sliceInfo.End); the Force saves frames - 1
 
 
 def read_xpm(path: Path) -> tuple[bytes, dict]:
@@ -47,6 +49,8 @@ def _set_layer(layer: dict, ref: SampleRef) -> None:
     layer["sampleName"] = ref.name
     layer["sampleFile"] = ref.file
     layer["active"] = True
+    layer["sliceInfo"]["Start"] = ref.start
+    layer["sliceInfo"]["End"] = ref.end
 
 
 def build_drum(name: str, pads: dict[int, SampleRef]) -> tuple[bytes, dict]:

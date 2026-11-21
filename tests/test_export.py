@@ -72,3 +72,17 @@ def test_failed_export_leaves_nothing_behind(cfg):
     with pytest.raises(AudioError):
         export_program(cfg, draft)
     assert list((cfg.export_dir / "Drums").iterdir()) == []
+
+
+def test_export_sets_sample_start_and_end(cfg):
+    sr = 44100
+    hit = np.concatenate([np.zeros(2205), 0.5 * np.sin(2 * np.pi * 200 * np.arange(4410) / sr), np.zeros(22050)])
+    sf.write(cfg.library / "Drums/late hit.wav", hit.astype(np.float32), sr, subtype="PCM_16")
+    for normalize in (True, False):
+        xpm = export_program(cfg, {"type": "drum", "name": f"Ends {normalize}", "pads": {
+            "0": "Drums/Kick 01.wav", "1": "Drums/late hit.wav"}}, normalize=normalize)
+        ins = read_xpm(xpm)[1]["data"]["drum"]["instruments"]
+        kick = ins[0]["layersv"][0]["sliceInfo"]
+        assert (kick["Start"], kick["End"]) == (0, int(0.3 * sr) - 1)
+        late = ins[1]["layersv"][0]["sliceInfo"]
+        assert late["Start"] == 2206 - 44 and abs(late["End"] - (2205 + 4410 - 1 + 441)) <= 2

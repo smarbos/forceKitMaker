@@ -97,6 +97,25 @@ def peak(data: np.ndarray) -> float:
     return float(np.max(np.abs(data))) if data.size else 0.0
 
 
+def detect_bounds(data: np.ndarray, samplerate: int, floor_db: float = -60.0) -> tuple[int, int]:
+    """Playback start/end frames (inclusive): from just before the first sound to just after the last.
+
+    "Sound" = louder than `floor_db` below the file's peak. 1 ms of lead-in and 10 ms of tail are
+    kept so attacks and decays aren't clipped. Silent files play in full.
+    """
+    frames = len(data)
+    if frames == 0:
+        return 0, 0
+    level = np.max(np.abs(data), axis=1) if data.ndim == 2 else np.abs(data)
+    top = float(level.max())
+    if top <= 0:
+        return 0, frames - 1
+    loud = np.nonzero(level > top * 10 ** (floor_db / 20))[0]
+    start = max(0, int(loud[0]) - int(0.001 * samplerate))
+    end = min(frames - 1, int(loud[-1]) + int(0.01 * samplerate))
+    return start, end
+
+
 def gain_to(target_peak_db: float, current_peak: float) -> float:
     if current_peak <= 0:
         return 1.0

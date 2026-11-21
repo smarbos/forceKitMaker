@@ -37,3 +37,11 @@ def test_build_keygroup():
 def test_templates_not_mutated():
     build_drum("a", {0: SampleRef("x", "x.wav")})
     assert build_drum("b", {})[1]["data"]["drum"]["instruments"][0]["layersv"][0]["sampleFile"] == ""
+
+
+def test_layers_get_start_and_end():
+    d = build_drum("k", {3: SampleRef("x", "x.wav", start=10, end=16606)})[1]["data"]
+    assert d["drum"]["instruments"][3]["layersv"][0]["sliceInfo"]["Start"] == 10
+    assert d["drum"]["instruments"][3]["layersv"][0]["sliceInfo"]["End"] == 16606
+    k = build_keygroup("s", [(SampleRef("a", "a.wav", start=0, end=999), 60, 0, 127)])[1]["data"]
+    assert k["drum"]["instruments"][0]["layersv"][0]["sliceInfo"]["End"] == 999
