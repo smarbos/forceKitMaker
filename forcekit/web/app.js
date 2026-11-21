@@ -477,24 +477,50 @@ function sampleForNote(note) {
 
 let audioCtx = null;
 const buffers = new Map();  // path → Promise<AudioBuffer>
+const voices = new Set();   // notes sounding now
+window.__voiceCount = () => voices.size;
+
+// start a note; returns a voice to pass to releaseNote (null for a silent key)
 function playNote(note) {
   const s = sampleForNote(note);
   flashKey(note);
-  if (!s) return;
+  if (!s) return null;
   const rate = Math.pow(2, (note - s.root) / 12);
   window.__lastPlay = { path: s.path, rate, note };
   audioCtx = audioCtx || new AudioContext();
+  if (audioCtx.state === "suspended") audioCtx.resume();
   if (!buffers.has(s.path)) {
     buffers.set(s.path, fetch("/api/audio?path=" + q(s.path))
       .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
       .then((b) => audioCtx.decodeAudioData(b))
       .catch((e) => { buffers.delete(s.path); throw e; }));
   }
+  const voice = { src: null, gain: null, released: false };
+  voices.add(voice);
   buffers.get(s.path).then((buf) => {
     const src = audioCtx.createBufferSource();
+    const gain = audioCtx.createGain();
     src.buffer = buf; src.playbackRate.value = rate;
-    src.connect(audioCtx.destination); src.start();
-  }).catch(() => status("Can't play " + baseName(s.path), true));
+    src.connect(gain).connect(audioCtx.destination);
+    src.onended = () => voices.delete(voice);
+    voice.src = src; voice.gain = gain;
+    src.start();
+    if (voice.released) fadeOut(voice, 0.15);  // a quick tap released before the sample loaded
+  }).catch(() => { voices.delete(voice); status("Can't play " + baseName(s.path), true); });
+  return voice;
+}
+
+function fadeOut(voice, after = 0) {
+  const t = audioCtx.currentTime + after;
+  voice.gain.gain.setTargetAtTime(0, t, 0.03);
+  voice.src.stop(t + 0.2);
+}
+
+// key released: fade the note out, like a gated note on the Force
+function releaseNote(voice) {
+  if (!voice || voice.released) return;
+  voice.released = true;
+  if (voice.src) fadeOut(voice);
 }
 
 function flashKey(note) {
@@ -525,7 +551,12 @@ function renderKeyboard(samples, ranges) {
       dot.title = "Root of " + baseName(samples[roots.get(n)].path);
       k.append(dot);
     }
-    k.addEventListener("pointerdown", (e) => { e.preventDefault(); playNote(n); });
+    k.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      const voice = playNote(n);
+      const up = () => { releaseNote(voice); window.removeEventListener("pointerup", up); };
+      window.addEventListener("pointerup", up);
+    });
     keys.append(k);
   }
   ranges.forEach(([lo, hi], i) => {
@@ -592,7 +623,11 @@ function moveEdge(samples, edge, note, single) {
 function startEdgeDrag(e, edge) {
   e.preventDefault();
   const samples = state.program.samples;
+  const startX = e.clientX;
+  let moved = false;  // a click without a drag changes nothing
   const move = (ev) => {
+    if (!moved && Math.abs(ev.clientX - startX) < 4) return;
+    moved = true;
     const x = ev.clientX - $("keys").getBoundingClientRect().left;
     moveEdge(samples, edge, noteAt(x), ev.shiftKey);
     renderSynth();
@@ -601,7 +636,7 @@ function startEdgeDrag(e, edge) {
     move(ev);
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
-    scheduleSave();
+    if (moved) scheduleSave();
   };
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
@@ -897,11 +932,19 @@ document.addEventListener("keydown", (e) => {
       state.kbOctave = Math.max(-2, Math.min(7, state.kbOctave + (key === "x" ? 1 : -1)));
       renderSynth();
     } else if (key in KEY_OFFSETS && !e.repeat) {
+      e.preventDefault();
       const note = (state.kbOctave + 2) * 12 + KEY_OFFSETS[key];
-      if (note <= 127) playNote(note);
+      if (note <= 127) { releaseNote(heldKeys.get(key)); heldKeys.set(key, playNote(note)); }
     }
   }
 });
+
+const heldKeys = new Map();  // computer key → voice it started
+document.addEventListener("keyup", (e) => {
+  const key = e.key.toLowerCase();
+  if (heldKeys.has(key)) { releaseNote(heldKeys.get(key)); heldKeys.delete(key); }
+});
+window.addEventListener("blur", () => { heldKeys.forEach(releaseNote); heldKeys.clear(); });
 
 $("tree-filter").addEventListener("input", renderTree);
 $("file-filter").addEventListener("input", () => { state.selected = -1; renderFiles(); });
