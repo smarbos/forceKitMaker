@@ -90,8 +90,8 @@ def test_export_sets_sample_start_and_end(cfg):
 
 def test_export_writes_colors(cfg):
     draft = {"type": "drum", "name": "Colors", "pads": {"0": "Drums/Kick 01.wav"}}
-    _, doc = read_xpm(export_program(cfg, draft, colors={0: 0xFF2A2A}))
-    assert doc["data"]["programPads"]["pads"]["value0"] == 0xFF2A2A
+    _, doc = read_xpm(export_program(cfg, draft, colors={0: 0xFF0000}))
+    assert doc["data"]["programPads"]["pads"]["value0"] == 0xFF0000
 
 
 def test_dot_dot_name_does_not_touch_other_exports(cfg):

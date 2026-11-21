@@ -49,9 +49,9 @@ def test_layers_get_start_and_end():
 
 def test_drum_pad_colors():
     a, b = SampleRef("A", "A.wav", 0, 9), SampleRef("B", "B.wav", 0, 9)
-    _, doc = build_drum("K", {0: a, 5: b}, colors={0: 0xFF2A2A, 5: 0x1AD8FF})
+    _, doc = build_drum("K", {0: a, 5: b}, colors={0: 0xFF0000, 5: 0x1AD8FF})
     pp = doc["data"]["programPads"]
     assert pp["Universal"]["value0"] is False
-    assert pp["pads"]["value0"] == 0xFF2A2A and pp["pads"]["value5"] == 0x1AD8FF and pp["pads"]["value1"] == 0
+    assert pp["pads"]["value0"] == 0xFF0000 and pp["pads"]["value5"] == 0x1AD8FF and pp["pads"]["value1"] == 0
     _, plain = build_drum("K", {0: a})
     assert plain["data"]["programPads"]["Universal"]["value0"] is True

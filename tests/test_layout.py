@@ -24,7 +24,7 @@ def test_is_one_shot():
 
 
 def test_color_for():
-    assert color_for("kick") == 0xFF2A2A
+    assert color_for("kick") == 0xFF0000 and color_for("clap") == 0xFF4000
     assert color_for(None) == color_for("bass") == 0x3CFF5A
 
 
@@ -64,3 +64,9 @@ def test_kind_hat_variants():
     closes = ["x/CH01.wav", "x/HH 01.wav", "Open Hats/Closed Hat 1.wav", "x/Shoe hat.wav"]
     assert [kind(e(p, "hat")) for p in opens] == ["hat:open"] * len(opens)
     assert [kind(e(p, "hat")) for p in closes] == ["hat:closed"] * len(closes)
+
+
+def test_every_type_has_its_own_color():
+    from forcekit.layout import TYPE_COLORS
+    assert set(TYPE_COLORS) == {"kick", "snare", "clap", "hat", "cymbal", "tom", "perc", "fx", "vocal"}
+    assert color_for("hat") == 0x1AD8FF and color_for("cymbal") == 0x3A6BFF

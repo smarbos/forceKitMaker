@@ -146,7 +146,7 @@ def test_export_colors_by_type(srv, cfg):
     status, body = post_json(srv, "/api/export", {"draft": d, "normalize": True, "overwrite": False})
     assert status == 200
     pads = read_xpm(body["path"])[1]["data"]["programPads"]["pads"]
-    assert pads["value0"] == 0xFF2A2A and pads["value1"] == 0xFFD21A
+    assert pads["value0"] == 0xFF0000 and pads["value1"] == 0xFFD21A
 
 
 def test_autofill_recursive(srv):
@@ -179,7 +179,7 @@ def test_autofill_one_shot_filter(cfg, library):
 
 def test_layout_and_hints(srv):
     layout = get_json(srv, "/api/layout")
-    assert layout["colors"]["kick"] == "#ff2a2a" and layout["default"] == "#3cff5a"
+    assert layout["colors"]["kick"] == "#ff0000" and layout["default"] == "#3cff5a"
     assert layout["max_one_shot"] == 4.0
     status, hints = post_json(srv, "/api/hints", {"paths": ["Drums/Kick 01.wav", "nope.wav"]})
     assert status == 200 and hints == {"Drums/Kick 01.wav": "kick"}

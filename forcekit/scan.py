@@ -27,7 +27,7 @@ HINTS: list[tuple[str, tuple[str, ...]]] = [
     ("tom", ("tom", "toms")),
     ("cymbal", ("cymbal", "cym", "cy", "crash", "ride", "china", "splash")),
     ("perc", ("perc", "percussion", "conga", "bongo", "shaker", "tamb", "tambourine", "cowbell", "rim",
-              "rimshot", "clave", "block")),
+              "rimshot", "clave", "block", "bell")),
     ("fx", ("fx", "sfx", "effect", "effects", "impact", "riser", "sweep", "noise")),
     ("vocal", ("vox", "vocal", "voice", "speech", "spoken")),
     ("bass", ("bass",)),
@@ -50,13 +50,15 @@ def _matches(token: str, keyword: str) -> bool:
 def type_hint(rel_path: str) -> str | None:
     parts = rel_path.split("/")
     stem = os.path.splitext(parts[-1])[0]
-    for name in [stem, *reversed(parts[:-1])]:
+    for depth, name in enumerate([stem, *reversed(parts[:-1])]):
         tokens = _tokens(name)
         if any(a == "bass" and b.startswith("drum") for a, b in zip(tokens, tokens[1:])):
             return "kick"
         for hint, keywords in HINTS:
             if any(_matches(t, k) for t in tokens for k in keywords):
                 return hint
+        if depth == 0 and "808" in tokens:  # "808_BOOM": an 808 bass hit; a folder named 808 says nothing
+            return "bass"
     return None
 
 

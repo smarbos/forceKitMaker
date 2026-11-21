@@ -21,7 +21,8 @@ SLOTS: list[tuple[str, ...]] = [
 BANKS = 4
 
 TYPE_COLORS: dict[str, int] = {
-    "kick": 0xFF2A2A, "snare": 0xFFD21A, "clap": 0xFF8A1A, "hat": 0x1AD8FF, "cymbal": 0x3A6BFF,
+    # Strong values: the pad LEDs wash out softer ones (a soft red showed pink on the Force).
+    "kick": 0xFF0000, "snare": 0xFFD21A, "clap": 0xFF4000, "hat": 0x1AD8FF, "cymbal": 0x3A6BFF,
     "tom": 0xA64DFF, "perc": 0x9DFF1A, "fx": 0xFF4DC4, "vocal": 0xF0F0F0,
 }
 DEFAULT_COLOR = 0x3CFF5A  # untyped / other sounds: the Force template's green family
