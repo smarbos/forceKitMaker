@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forcekit"
+version = "0.1.0"
+description = "Browse samples and build Akai Force drum kits and synths"
+requires-python = ">=3.11"
+dependencies = ["numpy", "soundfile"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+forcekit = "forcekit.cli:main"
+
+[tool.setuptools]
+packages = ["forcekit"]
+
+[tool.setuptools.package-data]
+forcekit = ["templates/*.xpm", "web/*"]
