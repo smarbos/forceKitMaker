@@ -130,3 +130,12 @@ button.wide { width: 100%; margin-bottom: 10px; padding: 7px; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #34343a; border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* settings panel */
+.settings-btn { margin-left: auto; }
+.settings { background: var(--panel); border-bottom: 1px solid var(--line); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.settings-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.settings-grid input { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--text); }
+#settings-result.ok { color: var(--lit); }
+#settings-result.error { color: #ff4d4d; }

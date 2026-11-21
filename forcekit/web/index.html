@@ -10,7 +10,22 @@
 <header class="top">
   <strong>forcekit</strong>
   <span id="status" class="status" role="status"></span>
+  <button id="settings-open" type="button" class="settings-btn" title="Force connection settings">⚙ Settings</button>
 </header>
+<section id="settings" class="settings" hidden aria-label="Settings">
+  <div class="settings-grid">
+    <label>Force IP address <input id="force-host" type="text" spellcheck="false" placeholder="192.168.0.27"></label>
+    <label>User <input id="force-user" type="text" spellcheck="false" placeholder="root"></label>
+    <label>Folder on the Force <input id="force-dir" type="text" spellcheck="false" placeholder="/media/…/forcekit"></label>
+  </div>
+  <div class="row">
+    <button id="settings-test" type="button">Test connection</button>
+    <button id="settings-save" type="button" class="primary">Save</button>
+    <button id="settings-close" type="button">Close</button>
+    <span id="settings-result" class="small"></span>
+  </div>
+  <p class="muted small">Sending uses your SSH key (no password is stored). Kits go to &lt;folder&gt;/Drums/&lt;name&gt;/ and &lt;folder&gt;/Synths/&lt;name&gt;/.</p>
+</section>
 <main class="cols">
   <section class="col" aria-label="Folders">
     <input id="tree-filter" type="search" placeholder="Filter folders">
@@ -48,7 +63,10 @@
     </div>
     <div class="row export-row">
       <label><input id="normalize" type="checkbox" checked> Normalize</label>
-      <span id="export-area"><button id="export" type="button" class="primary">Export</button></span>
+      <span class="row">
+        <span id="export-area"><button id="export" type="button" class="primary">Export</button></span>
+        <span id="send-area"><button id="send" type="button" class="primary">Send to Force</button></span>
+      </span>
     </div>
     <div id="export-result" class="small"></div>
   </section>

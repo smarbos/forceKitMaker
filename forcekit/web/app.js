@@ -442,6 +442,91 @@ function resetExportButton() {
   area.append(b);
 }
 
+// ---------- send to Force ----------
+async function doSend(overwrite = false) {
+  const area = $("send-area");
+  area.textContent = "";
+  area.append(el("span", "small", "Sending…"));
+  status("Exporting and sending to the Force…");
+  const p = state.program;
+  const r = await api("/api/send", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ draft: p, normalize: $("normalize").checked, overwrite }),
+  });
+  if (r.status === 409 && r.body && r.body.exists) {
+    area.textContent = "";
+    area.append(el("span", "small", "Already on the Force. "));
+    const yes = el("button", "primary", "Replace"); yes.type = "button"; yes.id = "send-replace";
+    const no = el("button", "", "Cancel"); no.type = "button";
+    yes.addEventListener("click", () => doSend(true));
+    no.addEventListener("click", () => { resetSendButton(); status(""); });
+    area.append(yes, " ", no);
+    status(`"${p.name}" is already on the Force`);
+    return;
+  }
+  resetSendButton();
+  if (r.ok) {
+    $("export-result").textContent = `On the Force (${r.body.host}): ${r.body.path}`;
+    status(`Sent "${p.name}" to the Force`);
+  } else {
+    status("Send to Force failed: " + ((r.body && r.body.error) || r.status), true);
+  }
+}
+
+function resetSendButton() {
+  const area = $("send-area");
+  area.textContent = "";
+  const b = el("button", "primary", "Send to Force");
+  b.id = "send"; b.type = "button";
+  b.addEventListener("click", () => doSend(false));
+  area.append(b);
+}
+
+// ---------- settings ----------
+function settingsResult(msg, kind) {
+  const r = $("settings-result");
+  r.textContent = msg;
+  r.className = "small " + (kind || "");
+}
+
+async function openSettings() {
+  const panel = $("settings");
+  if (!panel.hidden) { panel.hidden = true; return; }
+  const r = await api("/api/settings");
+  if (r.ok) {
+    $("force-host").value = r.body.force_host;
+    $("force-user").value = r.body.force_user;
+    $("force-dir").value = r.body.force_dir;
+  }
+  settingsResult("");
+  panel.hidden = false;
+  $("force-host").focus();
+}
+
+async function saveSettings() {
+  const r = await api("/api/settings", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ force_host: $("force-host").value, force_user: $("force-user").value,
+                           force_dir: $("force-dir").value }),
+  });
+  if (r.ok) settingsResult("Saved", "ok");
+  else settingsResult((r.body && r.body.error) || "Couldn't save", "error");
+  return r.ok;
+}
+
+async function testSettings() {
+  if (!(await saveSettings())) return;  // test what's in the fields
+  settingsResult("Connecting…");
+  const r = await api("/api/settings/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  if (r.ok) settingsResult("OK — connected. Free space: " + r.body.info, "ok");
+  else settingsResult((r.body && r.body.error) || "Connection failed", "error");
+}
+
+$("settings-open").addEventListener("click", openSettings);
+$("settings-close").addEventListener("click", () => { $("settings").hidden = true; });
+$("settings-save").addEventListener("click", saveSettings);
+$("settings-test").addEventListener("click", testSettings);
+
 // ---------- tree ----------
 function renderTree() {
   const box = $("tree");
@@ -564,6 +649,7 @@ $("one-shots").addEventListener("change", () => {
   const lay = await api("/api/layout");
   if (lay.ok) state.layout = lay.body;
   resetExportButton();
+  resetSendButton();
   newProgram("drum");
   loadDraftList();
   const r = await api("/api/tree");
