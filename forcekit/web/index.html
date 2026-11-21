@@ -58,7 +58,12 @@
       <div id="pad-info" class="pad-info"></div>
     </div>
     <div id="synth-panel" hidden>
-      <div id="keymap" class="keymap" aria-hidden="true"></div>
+      <div class="row kb-bar">
+        <span id="kb-octave" class="small"></span>
+        <span class="muted small">A–K / W–U play · Z / X octave</span>
+        <button id="auto-split" type="button" hidden title="Go back to splitting the keyboard halfway between root notes">Auto split</button>
+      </div>
+      <div id="keyboard" class="keyboard"><div id="bands" class="bands"></div><div id="keys" class="keys"></div></div>
       <div id="synth-list" class="synth-list"></div>
     </div>
     <div class="row export-row">

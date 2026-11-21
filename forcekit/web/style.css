@@ -123,10 +123,29 @@ button.wide { width: 100%; margin-bottom: 10px; padding: 7px; }
 
 /* synth */
 #synth-panel { background: #0e0e10; border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
-.keymap { display: flex; height: 22px; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; background: var(--screen); }
-.keymap span { height: 100%; border-right: 1px solid #000; }
-.keymap span:nth-child(odd) { background: var(--lit); opacity: .75; }
-.keymap span:nth-child(even) { background: #1f8f32; }
+.kb-bar { justify-content: space-between; margin-bottom: 6px; }
+#kb-octave { color: var(--accent); font-weight: 600; }
+/* all 128 notes; scrolls sideways. Bands above show each sample's section. */
+.keyboard { overflow-x: auto; overflow-y: hidden; background: var(--screen); border: 1px solid var(--line); border-radius: 4px; padding: 4px 4px 2px; }
+.bands { position: relative; height: 22px; margin-bottom: 3px; }
+.band {
+  position: absolute; top: 0; height: 100%; border-radius: 3px; padding: 0 2px; overflow: clip;
+  color: #111; font-size: 10px; font-weight: 700; line-height: 22px; white-space: nowrap; text-overflow: ellipsis;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.35);
+}
+.keys { position: relative; height: 92px; user-select: none; }
+.key { position: absolute; top: 0; cursor: pointer; border-radius: 0 0 3px 3px; }
+.key.white { width: 18px; height: 100%; background: linear-gradient(#e9e9ec, #cfcfd4); border: 1px solid #333; z-index: 1; }
+.key.black { width: 12px; height: 58%; background: linear-gradient(#2a2a2e, #0d0d0f); border: 1px solid #000; z-index: 2; }
+.key.off.white { background: linear-gradient(#77777c, #5e5e63); }
+.key.off.black { background: #0a0a0b; }
+.key.kb-range.white { box-shadow: inset 0 -4px 0 var(--accent); }
+.key.kb-range.black { box-shadow: inset 0 -3px 0 var(--accent); }
+.key.down.white, .key.down.black { background: var(--accent); }
+.key.white .root-mark { top: auto; bottom: 16px; }
+.band .label { position: sticky; left: 4px; }
+.key .cname { position: absolute; bottom: 3px; left: 0; right: 0; text-align: center; font-size: 8px; color: #333; pointer-events: none; }
+.key .root-mark { position: absolute; left: 50%; top: 4px; z-index: 3; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; border: 1px solid #000; pointer-events: none; }
 .synth-list { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
 .synth-row { position: relative; display: grid; grid-template-columns: 76px 1fr 90px; gap: 8px; align-items: center; padding: 5px 26px 5px 6px; background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--lit); border-radius: 4px; }
 .synth-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }

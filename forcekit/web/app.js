@@ -17,7 +17,7 @@ const baseName = (path) => path.split("/").pop();
 
 const state = {
   tree: null, expanded: new Set([""]), folder: null, files: [], visible: [], selected: -1,
-  program: null, stem: null, pad: 0, saveTimer: null, folderSeq: 0,
+  program: null, stem: null, pad: 0, kbOctave: 3, kbShown: null, saveTimer: null, folderSeq: 0,
   layout: { colors: {}, default: "#3cff5a", max_one_shot: 4 },
   hints: new Map(),
   padNames: {}, padNamesSig: null,  // short auto names for the current pads  // library path → type hint (null = untyped); filled from listings and /api/hints
@@ -443,28 +443,118 @@ function flashPad(idx) {
   setTimeout(() => pad.classList.remove("hit"), 160);
 }
 
+// ---------- synth: sections, keyboard, pitched playback ----------
+const SECTION_COLORS = ["#ff6a1a", "#1ad8ff", "#9dff1a", "#ff4dc4", "#ffd21a", "#a64dff", "#3a6bff", "#f0f0f0"];
+const WHITE_W = 18, BLACK_W = 12;
+const KEY_OFFSETS = { a: 0, w: 1, s: 2, e: 3, d: 4, f: 5, t: 6, g: 7, y: 8, h: 9, u: 10, j: 11, k: 12 };
+const isBlack = (n) => [1, 3, 6, 8, 10].includes(n % 12);
+const whitesBefore = (n) => { let c = 0; for (let m = 0; m < n; m++) if (!isBlack(m)) c++; return c; };
+const noteLeft = (n) => whitesBefore(n) * WHITE_W - (isBlack(n) ? BLACK_W / 2 : 0);
+const noteRight = (n) => isBlack(n) ? whitesBefore(n) * WHITE_W + BLACK_W / 2 : (whitesBefore(n) + 1) * WHITE_W;
+const sectionColor = (i) => SECTION_COLORS[i % SECTION_COLORS.length];
+const isManual = (samples) => samples.length > 0 && "low" in samples[0];
+
+// [low, high] of each sample (samples already in display order): hand-set, else the automatic split
+function sections(samples) {
+  return isManual(samples) ? samples.map((s) => [s.low, s.high]) : keyRanges(samples.map((s) => s.root));
+}
+
+function sampleForNote(note) {
+  const samples = state.program.samples;
+  const i = sections(samples).findIndex(([lo, hi]) => lo <= note && note <= hi);
+  return i < 0 ? null : samples[i];
+}
+
+let audioCtx = null;
+const buffers = new Map();  // path → Promise<AudioBuffer>
+function playNote(note) {
+  const s = sampleForNote(note);
+  flashKey(note);
+  if (!s) return;
+  const rate = Math.pow(2, (note - s.root) / 12);
+  window.__lastPlay = { path: s.path, rate, note };
+  audioCtx = audioCtx || new AudioContext();
+  if (!buffers.has(s.path)) {
+    buffers.set(s.path, fetch("/api/audio?path=" + q(s.path))
+      .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .then((b) => audioCtx.decodeAudioData(b))
+      .catch((e) => { buffers.delete(s.path); throw e; }));
+  }
+  buffers.get(s.path).then((buf) => {
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf; src.playbackRate.value = rate;
+    src.connect(audioCtx.destination); src.start();
+  }).catch(() => status("Can't play " + baseName(s.path), true));
+}
+
+function flashKey(note) {
+  const k = $("keys").querySelector(`[data-note="${note}"]`);
+  if (!k) return;
+  k.classList.add("down");
+  setTimeout(() => k.classList.remove("down"), 160);
+}
+
+function renderKeyboard(samples, ranges) {
+  const keys = $("keys"), bands = $("bands");
+  keys.textContent = ""; bands.textContent = "";
+  const width = whitesBefore(128) * WHITE_W;
+  keys.style.width = bands.style.width = width + "px";
+  const base = (state.kbOctave + 2) * 12;
+  const roots = new Map(samples.map((s, i) => [s.root, i]));
+  for (let n = 0; n < 128; n++) {
+    const k = el("div", "key " + (isBlack(n) ? "black" : "white"));
+    k.dataset.note = n;
+    k.title = noteName(n);
+    k.style.left = noteLeft(n) + "px";
+    if (!ranges.some(([lo, hi]) => lo <= n && n <= hi)) k.classList.add("off");
+    if (n >= base && n <= base + 12) k.classList.add("kb-range");
+    if (n % 12 === 0) k.append(el("span", "cname", noteName(n)));
+    if (roots.has(n)) {
+      const dot = el("span", "root-mark");
+      dot.style.background = sectionColor(roots.get(n));
+      dot.title = "Root of " + baseName(samples[roots.get(n)].path);
+      k.append(dot);
+    }
+    k.addEventListener("pointerdown", (e) => { e.preventDefault(); playNote(n); });
+    keys.append(k);
+  }
+  ranges.forEach(([lo, hi], i) => {
+    const b = el("div", "band");
+    b.append(el("span", "label", baseName(samples[i].path)));
+    b.dataset.idx = i;
+    b.style.left = noteLeft(lo) + "px";
+    b.style.width = (noteRight(hi) - noteLeft(lo)) + "px";
+    b.style.background = sectionColor(i);
+    b.title = `${baseName(samples[i].path)}: ${noteName(lo)}–${noteName(hi)}`;
+    bands.append(b);
+  });
+  $("kb-octave").textContent = `Keys: ${noteName(base)}–${noteName(Math.min(base + 12, 127))}`;
+  $("auto-split").hidden = !isManual(samples);
+  const shown = state.stem || state.program.name;
+  if (state.kbShown !== shown) {  // new program: start the view at C1
+    state.kbShown = shown;
+    $("keyboard").scrollLeft = noteLeft(36);
+  }
+}
+
 function renderSynth() {
   const samples = state.program.samples;
-  samples.sort((a, b) => a.root - b.root);
-  const ranges = keyRanges(samples.map((s) => s.root));
-  const map = $("keymap");
-  map.textContent = "";
-  ranges.forEach(([lo, hi]) => {
-    const seg = el("span");
-    seg.style.width = ((hi - lo + 1) / 128 * 100) + "%";
-    map.append(seg);
-  });
+  const manual = isManual(samples);
+  samples.sort((a, b) => manual ? a.low - b.low : a.root - b.root);
+  const ranges = sections(samples);
+  renderKeyboard(samples, ranges);
   const list = $("synth-list");
   list.textContent = "";
   if (!samples.length) list.append(el("p", "muted", "Add samples: double-click, Enter, or drag them here."));
   samples.forEach((s, i) => {
     const row = el("div", "synth-row");
+    row.style.borderLeftColor = sectionColor(i);
     const sel = el("select");
     sel.setAttribute("aria-label", "Root note");
     for (let m = 0; m < 128; m++) sel.append(new Option(noteName(m), String(m), false, m === s.root));
     sel.addEventListener("change", () => {
       const m = +sel.value;
-      if (samples.some((o, j) => j !== i && o.root === m)) {
+      if (!manual && samples.some((o, j) => j !== i && o.root === m)) {
         status(`${noteName(m)} is already used by another sample`, true);
         sel.value = String(s.root);
         return;
@@ -714,6 +804,16 @@ document.addEventListener("keydown", (e) => {
     if (player.src) { player.currentTime = 0; player.play().catch(() => {}); }
   } else if (e.key === "Enter" && state.selected >= 0) { e.preventDefault(); assign(state.visible[state.selected]); }
   else if (e.key === "]" || e.key === "[") { e.preventDefault(); stepPad(e.key === "]" ? 1 : -1); }
+  else if (state.program && state.program.type === "synth" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const key = e.key.toLowerCase();
+    if (key === "z" || key === "x") {
+      state.kbOctave = Math.max(-2, Math.min(7, state.kbOctave + (key === "x" ? 1 : -1)));
+      renderSynth();
+    } else if (key in KEY_OFFSETS && !e.repeat) {
+      const note = (state.kbOctave + 2) * 12 + KEY_OFFSETS[key];
+      if (note <= 127) playNote(note);
+    }
+  }
 });
 
 $("tree-filter").addEventListener("input", renderTree);
