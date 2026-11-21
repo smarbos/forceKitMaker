@@ -44,3 +44,21 @@ def library(tmp_path) -> Path:
 def cfg(library, tmp_path):
     from forcekit.config import Config
     return Config(library=library, data_dir=tmp_path / "data", export_dir=tmp_path / "out")
+
+
+@pytest.fixture
+def fake_ssh(tmp_path):
+    """Stand-in for ssh: drops options and the host, runs the remote command locally."""
+    script = tmp_path / "fake-ssh"
+    script.write_text('#!/bin/sh\nwhile [ $# -gt 0 ]; do case "$1" in -o) shift 2;; -*) shift;; *) break;; esac; done\n'
+                      'shift\nexec sh -c "$*"\n')
+    script.chmod(0o755)
+    return str(script)
+
+
+@pytest.fixture
+def force_cfg(cfg, fake_ssh, tmp_path):
+    cfg.force_dir = str(tmp_path / "force/forcekit")
+    cfg.ssh_command = [fake_ssh]
+    cfg.config_path = tmp_path / "config.json"
+    return cfg
