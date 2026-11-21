@@ -63,4 +63,4 @@ def test_auto_names_nothing_shared_or_single():
 
 def test_auto_names_match_what_the_force_gets():
     from forcekit.names import auto_names
-    assert auto_names({0: "p/X_CRASH_RIDE.wav", 1: "p/X_Kick.wav"}) == {0: "CRASH RIDE", 1: "Kick"}
+    assert auto_names({0: "p/X_CRASH_RIDE\uf025.wav", 1: "p/X_Kick.wav"}) == {0: "CRASH RIDE", 1: "Kick"}
