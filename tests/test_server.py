@@ -101,3 +101,14 @@ def test_drafts_and_export(srv):
     assert post_json(srv, "/api/export", {"draft": {"type": "zzz"}, "normalize": True, "overwrite": False})[0] == 400
     assert _request(srv, "/api/drafts/" + quote("Web Kit"), "DELETE").status == 204
     assert get_json(srv, "/api/drafts") == []
+
+
+def test_index_page(srv):
+    html = get(srv, "/").read().decode()
+    for el in ['id="tree"', 'id="files"', 'id="program"', 'id="pads"', 'id="synth-list"', 'id="export"',
+               "/static/app.js"]:
+        assert el in html
+    assert get_status(srv, "/static/app.js") == 200
+    assert get_status(srv, "/static/style.css") == 200
+    assert get_status(srv, "/static/../server.py") in (403, 404)
+    assert get_status(srv, "/static/%2e%2e/server.py") in (403, 404)

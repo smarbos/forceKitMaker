@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>forcekit</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <strong>forcekit</strong>
+  <span id="status" class="status" role="status"></span>
+</header>
+<main class="cols">
+  <section class="col" aria-label="Folders">
+    <input id="tree-filter" type="search" placeholder="Filter folders">
+    <div id="tree" class="tree"></div>
+  </section>
+  <section class="col" aria-label="Samples">
+    <div class="row">
+      <input id="file-filter" type="search" placeholder="Filter samples">
+      <select id="hint-filter" aria-label="Type"><option value="">all types</option></select>
+    </div>
+    <div id="folder-title" class="muted"></div>
+    <div id="files" class="files" tabindex="0"></div>
+    <p class="muted small">↑/↓ play · Space replay · Enter / double-click / drag to assign</p>
+  </section>
+  <section class="col" id="program" aria-label="Program">
+    <div class="row">
+      <div class="seg" role="group" aria-label="Program type">
+        <button id="type-drum" type="button">Drum</button>
+        <button id="type-synth" type="button">Synth</button>
+      </div>
+      <select id="drafts" aria-label="Drafts"></select>
+      <button id="delete-draft" type="button" title="Delete this draft">Delete</button>
+    </div>
+    <input id="program-name" type="text" aria-label="Program name">
+    <div id="drum-panel">
+      <div class="seg banks" id="banks" role="group" aria-label="Pad bank"></div>
+      <div id="pads" class="pads"></div>
+    </div>
+    <div id="synth-panel" hidden>
+      <div id="keymap" class="keymap" aria-hidden="true"></div>
+      <div id="synth-list" class="synth-list"></div>
+    </div>
+    <div class="row export-row">
+      <label><input id="normalize" type="checkbox" checked> Normalize</label>
+      <span id="export-area"><button id="export" type="button" class="primary">Export</button></span>
+    </div>
+    <div id="export-result" class="small"></div>
+  </section>
+</main>
+<audio id="player" preload="auto"></audio>
+<script src="/static/app.js"></script>
+</body>
+</html>
