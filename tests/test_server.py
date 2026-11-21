@@ -201,3 +201,48 @@ def test_autofill_suggests_unique_name(srv):
     put_json(srv, "/api/drafts/", {"type": "drum", "name": long[:40], "pads": {}})
     from forcekit.server import _suggest_name
     assert len(_suggest_name(long, {long[:40]})) <= 48 and _suggest_name(long, {long[:40]}).endswith(" 2")
+
+
+@pytest.fixture
+def force_srv(force_cfg):
+    scan_library(force_cfg)
+    server = make_server(force_cfg, port=0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_address[1]}"
+    server.shutdown()
+    server.server_close()
+
+
+def test_settings_round_trip_and_validation(force_srv, force_cfg):
+    s = get_json(force_srv, "/api/settings")
+    assert s == {"force_host": "192.168.0.27", "force_user": "root", "force_dir": force_cfg.force_dir}
+    new = {"force_host": "10.0.0.9", "force_user": "root", "force_dir": "/media/X/forcekit"}
+    assert put_json(force_srv, "/api/settings", new) == new
+    assert json.loads(force_cfg.config_path.read_text())["force_host"] == "10.0.0.9"
+    for bad in [dict(new, force_host=""), dict(new, force_host="a b"), dict(new, force_dir="rel/dir"),
+                dict(new, force_user="")]:
+        assert _request(force_srv, "/api/settings", "PUT", bad).status == 400
+    assert get_json(force_srv, "/api/settings") == new
+
+
+def test_send_to_force(force_srv, force_cfg):
+    from pathlib import Path
+    d = {"type": "drum", "name": "Sent Kit", "pads": {"0": "Drums/Kick 01.wav"}}
+    req = {"draft": d, "normalize": True, "overwrite": False}
+    status, body = post_json(force_srv, "/api/send", req)
+    assert status == 200, body
+    assert (Path(force_cfg.force_dir) / "Drums/Sent Kit/Sent Kit.xpm").is_file()
+    assert (force_cfg.export_dir / "Drums/Sent Kit/Sent Kit.xpm").is_file()  # local export too
+    status, body = post_json(force_srv, "/api/send", req)
+    assert status == 409 and body["exists"]
+    assert post_json(force_srv, "/api/send", dict(req, overwrite=True))[0] == 200
+    assert post_json(force_srv, "/api/settings/test", {})[0] == 200
+
+
+def test_send_reports_unreachable_force(force_srv, force_cfg):
+    force_cfg.ssh_command = ["false"]
+    d = {"type": "drum", "name": "X", "pads": {"0": "Drums/Kick 01.wav"}}
+    status, body = post_json(force_srv, "/api/send", {"draft": d, "normalize": True, "overwrite": False})
+    assert status == 502 and body["error"]
+    status, body = post_json(force_srv, "/api/settings/test", {})
+    assert status == 502 and body["error"]

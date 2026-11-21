@@ -3,15 +3,17 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import re
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from .audio import AudioError, browser_playable, detect_root, load, write_wav
-from .config import Config
+from .config import Config, save_force_settings
 from .drafts import DraftError, delete_draft, list_drafts, load_draft, save_draft, validate_draft
 from .export import ExportExists, export_program
+from .send import ForceError, SendExists, send_program, test_connection
 from .layout import DEFAULT_COLOR, MAX_ONE_SHOT, TYPE_COLORS, autofill, color_for, is_one_shot
 from .names import natural_key, safe_name, unique_name
 
@@ -133,13 +135,15 @@ def make_server(cfg: Config, port: int = 0) -> ThreadingHTTPServer:
                     return self.static
                 return {"/api/tree": self.tree, "/api/folder": self.folder, "/api/audio": self.audio,
                         "/api/root": self.root_note, "/api/drafts": self.drafts,
-                        "/api/layout": self.layout}.get(path) or (
+                        "/api/layout": self.layout, "/api/settings": self.settings_get}.get(path) or (
                     self.draft_get if path.startswith("/api/drafts/") else None)
             if path.startswith("/api/drafts/"):
                 return {"PUT": self.draft_put, "DELETE": self.draft_delete}.get(method)
+            if method == "PUT" and path == "/api/settings":
+                return self.settings_put
             if method == "POST":
-                return {"/api/export": self.export, "/api/autofill": self.autofill,
-                        "/api/hints": self.hints}.get(path)
+                return {"/api/export": self.export, "/api/autofill": self.autofill, "/api/hints": self.hints,
+                        "/api/send": self.send, "/api/settings/test": self.settings_test}.get(path)
             return None
 
         # ---- routes ---------------------------------------------------
@@ -243,23 +247,68 @@ def make_server(cfg: Config, port: int = 0) -> ThreadingHTTPServer:
             self._json({p: library.files[p]["type_hint"] for p in paths
                         if isinstance(p, str) and p in library.files})
 
-        def export(self, path, query):
-            body = self._body()
-            if not isinstance(body, dict):
-                raise ApiError(400, "invalid request")
+        def _export(self, body: dict, overwrite: bool) -> Path:
             draft = body.get("draft")
             colors = None
             if isinstance(draft, dict) and draft.get("type") == "drum" and isinstance(draft.get("pads"), dict):
                 colors = {int(k): color_for(library.files.get(p, {}).get("type_hint"))
                           for k, p in draft["pads"].items() if str(k).isdigit() and isinstance(p, str)}
             try:
-                written = export_program(cfg, draft, normalize=bool(body.get("normalize", True)),
-                                         overwrite=bool(body.get("overwrite", False)), colors=colors)
+                return export_program(cfg, draft, normalize=bool(body.get("normalize", True)),
+                                      overwrite=overwrite, colors=colors)
             except ExportExists as e:
                 raise ApiError(409, "program already exists", exists=True, path=str(e.path))
             except AudioError as e:
                 raise ApiError(422, str(e))
-            self._json({"path": str(written)})
+
+        def export(self, path, query):
+            body = self._body()
+            if not isinstance(body, dict):
+                raise ApiError(400, "invalid request")
+            self._json({"path": str(self._export(body, bool(body.get("overwrite", False))))})
+
+        def send(self, path, query):
+            body = self._body()
+            if not isinstance(body, dict):
+                raise ApiError(400, "invalid request")
+            written = self._export(body, overwrite=True)  # local copy is just the staging area for the Force
+            try:
+                remote = send_program(cfg, written.parent, overwrite=bool(body.get("overwrite", False)))
+            except SendExists as e:
+                raise ApiError(409, "program already exists on the Force", exists=True, path=e.path)
+            except ForceError as e:
+                raise ApiError(502, str(e))
+            self._json({"path": remote, "host": cfg.force_host})
+
+        def _settings(self) -> dict:
+            return {"force_host": cfg.force_host, "force_user": cfg.force_user, "force_dir": cfg.force_dir}
+
+        def settings_get(self, path, query):
+            self._json(self._settings())
+
+        def settings_put(self, path, query):
+            body = self._body()
+            if not isinstance(body, dict):
+                raise ApiError(400, "invalid request")
+            host, user, folder = (body.get(k) for k in ("force_host", "force_user", "force_dir"))
+            if not all(isinstance(v, str) and v.strip() for v in (host, user, folder)):
+                raise ApiError(400, "IP address, user and folder are all required")
+            host, user, folder = host.strip(), user.strip(), folder.strip()
+            if not re.fullmatch(r"[A-Za-z0-9.:\-]+", host):
+                raise ApiError(400, "the IP address may only contain letters, digits, dots, colons and dashes")
+            if not re.fullmatch(r"[A-Za-z0-9._\-]+", user):
+                raise ApiError(400, "invalid user name")
+            if not folder.startswith("/"):
+                raise ApiError(400, "the folder on the Force must be a full path starting with /")
+            save_force_settings(cfg, host, user, folder.rstrip("/") or "/")
+            self._json(self._settings())
+
+        def settings_test(self, path, query):
+            try:
+                info = test_connection(cfg)
+            except ForceError as e:
+                raise ApiError(502, str(e))
+            self._json({"ok": True, "info": info})
 
     return ThreadingHTTPServer(("127.0.0.1", port), Handler)
 
