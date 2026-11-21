@@ -84,4 +84,5 @@ def auto_names(pads: dict) -> dict:
             pre += 1
         while suf < shortest - pre - 1 and len({ws[-1 - suf].lower() for ws in lists}) == 1:
             suf += 1
-    return {k: " ".join(ws[pre:len(ws) - suf]) for k, ws in words.items()}
+    # cleaned like the exported sample names, so the screen shows exactly what the Force gets
+    return {k: safe_name(" ".join(ws[pre:len(ws) - suf])) for k, ws in words.items()}
