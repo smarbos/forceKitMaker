@@ -202,6 +202,8 @@ function renderProgram() {
   if (state.shownStem !== (state.stem || p.name)) {  // switched program: drop stale export message
     state.shownStem = state.stem || p.name;
     $("export-result").textContent = "";
+    resetExportButton();  // a pending "Overwrite?"/"Replace?" belongs to the previous program
+    resetSendButton();
   }
   $("type-drum").classList.toggle("on", p.type === "drum");
   $("type-synth").classList.toggle("on", p.type === "synth");
@@ -443,12 +445,12 @@ function resetExportButton() {
 }
 
 // ---------- send to Force ----------
-async function doSend(overwrite = false) {
+async function doSend(overwrite = false, program = null) {
+  const p = program || state.program;  // Replace sends the program that was asked about
   const area = $("send-area");
   area.textContent = "";
   area.append(el("span", "small", "Sending…"));
   status("Exporting and sending to the Force…");
-  const p = state.program;
   const r = await api("/api/send", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ draft: p, normalize: $("normalize").checked, overwrite }),
@@ -458,12 +460,13 @@ async function doSend(overwrite = false) {
     area.append(el("span", "small", "Already on the Force. "));
     const yes = el("button", "primary", "Replace"); yes.type = "button"; yes.id = "send-replace";
     const no = el("button", "", "Cancel"); no.type = "button";
-    yes.addEventListener("click", () => doSend(true));
+    yes.addEventListener("click", () => doSend(true, p));
     no.addEventListener("click", () => { resetSendButton(); status(""); });
     area.append(yes, " ", no);
     status(`"${p.name}" is already on the Force`);
     return;
   }
+  if (p !== state.program) { if (r.ok) status(`Sent "${p.name}" to the Force`); return; }
   resetSendButton();
   if (r.ok) {
     $("export-result").textContent = `On the Force (${r.body.host}): ${r.body.path}`;

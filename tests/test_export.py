@@ -92,3 +92,9 @@ def test_export_writes_colors(cfg):
     draft = {"type": "drum", "name": "Colors", "pads": {"0": "Drums/Kick 01.wav"}}
     _, doc = read_xpm(export_program(cfg, draft, colors={0: 0xFF2A2A}))
     assert doc["data"]["programPads"]["pads"]["value0"] == 0xFF2A2A
+
+
+def test_dot_dot_name_does_not_touch_other_exports(cfg):
+    keep = export_program(cfg, {"type": "drum", "name": "Keep", "pads": {"0": "Drums/Kick 01.wav"}})
+    out = export_program(cfg, {"type": "drum", "name": "..", "pads": {"0": "Drums/Kick 01.wav"}}, overwrite=True)
+    assert keep.is_file() and out.parent.name == "untitled"

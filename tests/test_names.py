@@ -32,3 +32,9 @@ def test_safe_name():
 def test_unique_name():
     taken = set()
     assert [unique_name("Kick 01", taken) for _ in range(3)] == ["Kick 01", "Kick 01 2", "Kick 01 3"]
+
+
+def test_safe_name_never_yields_dot_names():
+    from forcekit.names import safe_name
+    assert safe_name("..") == "untitled" and safe_name(".") == "untitled"
+    assert safe_name(".hidden kit") == "hidden kit"

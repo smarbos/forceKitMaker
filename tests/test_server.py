@@ -246,3 +246,17 @@ def test_send_reports_unreachable_force(force_srv, force_cfg):
     assert status == 502 and body["error"]
     status, body = post_json(force_srv, "/api/settings/test", {})
     assert status == 502 and body["error"]
+
+
+def test_cross_site_requests_refused(srv):
+    d = json.dumps({"folder": "", "one_shots": False}).encode()
+    def post(headers):
+        req = urllib.request.Request(srv + "/api/autofill", data=d, method="POST", headers=headers)
+        try:
+            return urllib.request.urlopen(req).status
+        except urllib.error.HTTPError as e:
+            return e.code
+    assert post({"Content-Type": "text/plain"}) == 415
+    assert post({"Content-Type": "application/json", "Origin": "https://evil.example"}) == 403
+    assert post({"Content-Type": "application/json", "Host": "evil.example:80"}) == 403
+    assert post({"Content-Type": "application/json", "Origin": srv}) == 200

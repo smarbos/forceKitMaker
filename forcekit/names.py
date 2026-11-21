@@ -46,6 +46,7 @@ def key_ranges(roots: list[int]) -> list[tuple[int, int]]:
 def safe_name(text: str, max_len: int = 48) -> str:
     ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
     cleaned = " ".join(_BAD.sub("", ascii_text).split())[:max_len].strip()
+    cleaned = cleaned.lstrip(". ")  # never ".", ".." or a hidden file/folder
     return cleaned or "untitled"
 
 

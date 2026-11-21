@@ -102,10 +102,24 @@ def make_server(cfg: Config, port: int = 0) -> ThreadingHTTPServer:
                 raise ApiError(404, "not in the index")
             return entry
 
+        def _check_same_origin(self, method: str) -> None:
+            """Only the forcekit page may change things: refuse other websites and DNS rebinding."""
+            port = self.server.server_address[1]
+            local = {f"127.0.0.1:{port}", f"localhost:{port}"}
+            if self.headers.get("Host") not in local:
+                raise ApiError(403, "forbidden host")
+            origin = self.headers.get("Origin")
+            if origin and origin.split("://", 1)[-1] not in local:
+                raise ApiError(403, "forbidden origin")
+            if method != "DELETE" and (self.headers.get("Content-Type") or "").split(";")[0].strip() != "application/json":
+                raise ApiError(415, "expected application/json")
+
         def _dispatch(self, method: str) -> None:
             url = urlsplit(self.path)
             path, query = unquote(url.path), parse_qs(url.query)
             try:
+                if method in ("POST", "PUT", "DELETE"):
+                    self._check_same_origin(method)
                 route = self._route(method, path)
                 if route is None:
                     raise ApiError(404, "not found")

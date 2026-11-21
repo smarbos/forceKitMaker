@@ -15,6 +15,7 @@ from pathlib import Path
 from .config import Config
 
 CONNECT_TIMEOUT = 6  # seconds
+MARKER = ".forcekit-complete"
 COPY_TIMEOUT = 600
 
 
@@ -30,6 +31,8 @@ class SendExists(Exception):
 
 def _ssh(cfg: Config, command: str, data: bytes | None = None, timeout: float = 30) -> str:
     argv = [*cfg.ssh_command, "-o", "BatchMode=yes", "-o", f"ConnectTimeout={CONNECT_TIMEOUT}",
+            # notice a dead Wi-Fi link in ~15 s instead of waiting for COPY_TIMEOUT
+            "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3",
             f"{cfg.force_user}@{cfg.force_host}", command]
     try:
         r = subprocess.run(argv, input=data if data is not None else b"", capture_output=True, timeout=timeout)
@@ -69,12 +72,18 @@ def _tar_stream(folder: Path) -> bytes:
 
     with tarfile.open(fileobj=buf, mode="w", format=tarfile.GNU_FORMAT) as tar:
         tar.add(folder, arcname=folder.name, filter=as_root)
+        # Last member: proves the whole archive arrived. tar exits 0 when its input ends
+        # exactly between two files, so its exit code alone can't tell a cut copy from a full one.
+        marker = as_root(tarfile.TarInfo(f"{folder.name}/{MARKER}"))
+        tar.addfile(marker, io.BytesIO(b""))
     return buf.getvalue()
 
 
 def send_program(cfg: Config, folder: Path, overwrite: bool = False) -> str:
     """Copy a local program folder (…/Drums/<Name>) to <force_dir>/Drums/<Name>; return the remote path."""
     folder = Path(folder)
+    if folder.name in ("", ".", "..") or folder.parent.name in ("", ".", ".."):
+        raise ValueError(f"not a program folder: {folder}")
     type_dir = f"{cfg.force_dir.rstrip('/')}/{folder.parent.name}"
     target = f"{type_dir}/{folder.name}"
     q = shlex.quote
@@ -83,7 +92,8 @@ def send_program(cfg: Config, folder: Path, overwrite: bool = False) -> str:
     script = (
         f"T={q(type_dir)}; N={q(folder.name)}; S=\"$T/.$N.forcekit-tmp\"; "
         'mkdir -p "$T" && rm -rf "$S" && mkdir "$S" && tar -xf - -C "$S" '
-        '&& rm -rf "$T/$N" && mv "$S/$N" "$T/$N"; rc=$?; rm -rf "$S"; exit $rc'
+        f'&& {{ [ -f "$S/$N/{MARKER}" ] || {{ echo "copy incomplete (connection lost?)" >&2; false; }}; }} '
+        f'&& rm "$S/$N/{MARKER}" && rm -rf "$T/$N" && mv "$S/$N" "$T/$N"; rc=$?; rm -rf "$S"; exit $rc'
     )
     _ssh(cfg, script, data=_tar_stream(folder), timeout=COPY_TIMEOUT)
     return target

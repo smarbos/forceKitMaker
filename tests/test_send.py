@@ -62,3 +62,45 @@ def test_connection_ok_and_failure(force_cfg):
     force_cfg.ssh_command = ["false"]
     with pytest.raises(ForceError):
         check_connection(force_cfg)
+
+
+def _cut_before_marker(real, folder):
+    """The real archive, cut exactly between the last two members (tar itself then exits 0)."""
+    import io
+    import tarfile
+    data = real(folder)
+    with tarfile.open(fileobj=io.BytesIO(data)) as t:
+        last = t.getmembers()[-1]
+    assert last.name.endswith(".forcekit-complete")
+    return data[:last.offset]
+
+
+def test_truncated_send_at_file_boundary_keeps_old(force_cfg, tmp_path, monkeypatch):
+    import forcekit.send as send
+    send_program(force_cfg, make_program(tmp_path / "v1", "Kit", ["old.wav"]))
+    real = send._tar_stream
+    monkeypatch.setattr(send, "_tar_stream", lambda folder: _cut_before_marker(real, folder))
+    with pytest.raises(ForceError):
+        send_program(force_cfg, make_program(tmp_path / "v2", "Kit", ["new.wav"]), overwrite=True)
+    drums = Path(force_cfg.force_dir) / "Drums"
+    assert [p.name for p in (drums / "Kit" / "Kit_[ProgramData]").iterdir()] == ["old.wav"]
+    assert [p.name for p in drums.iterdir()] == ["Kit"]
+
+
+def test_marker_not_left_on_force(force_cfg, tmp_path):
+    send_program(force_cfg, make_program(tmp_path / "out", "Kit", ["a.wav"]))
+    assert not list(Path(force_cfg.force_dir).rglob(".forcekit-complete"))
+
+
+def test_ssh_uses_keepalive(force_cfg, monkeypatch):
+    import subprocess
+    seen = []
+    real = subprocess.run
+    monkeypatch.setattr("forcekit.send.subprocess.run", lambda argv, **kw: seen.append(argv) or real(argv, **kw))
+    check_connection(force_cfg)
+    assert "ServerAliveInterval=5" in seen[0] and "ServerAliveCountMax=3" in seen[0]
+
+
+def test_send_refuses_dot_folder(force_cfg, tmp_path):
+    with pytest.raises(ValueError):
+        send_program(force_cfg, tmp_path / "Drums" / "..")
