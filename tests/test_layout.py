@@ -56,3 +56,11 @@ def test_autofill_caps_at_four_banks():
 
 def test_natural_key():
     assert sorted(["Kick 10", "Kick 2"], key=natural_key) == ["Kick 2", "Kick 10"]
+
+
+def test_kind_hat_variants():
+    opens = ["x/OH01.wav", "x/HH_OH01.wav", "x/Hat_Open1.wav", "x/HHOpen.wav", "x/OHH1.wav",
+             "x/HiHat Opened.wav", "Open Hats/Hat 01.wav"]
+    closes = ["x/CH01.wav", "x/HH 01.wav", "Open Hats/Closed Hat 1.wav", "x/Shoe hat.wav"]
+    assert [kind(e(p, "hat")) for p in opens] == ["hat:open"] * len(opens)
+    assert [kind(e(p, "hat")) for p in closes] == ["hat:closed"] * len(closes)

@@ -13,7 +13,7 @@ from .config import Config
 from .drafts import DraftError, delete_draft, list_drafts, load_draft, save_draft, validate_draft
 from .export import ExportExists, export_program
 from .layout import DEFAULT_COLOR, MAX_ONE_SHOT, TYPE_COLORS, autofill, color_for, is_one_shot
-from .names import natural_key, safe_name
+from .names import natural_key, safe_name, unique_name
 
 WEB_DIR = Path(__file__).parent / "web"
 DEFAULT_ROOT = 60
@@ -50,6 +50,12 @@ class Library:
                     nodes[path] = node
                     nodes["/".join(parts[: i - 1])]["children"].append(node)
         return root
+
+
+def _suggest_name(base: str, taken: set[str]) -> str:
+    """A draft name not in `taken`; long bases are cut so a " 2" suffix survives safe_name's 48 chars."""
+    base = safe_name(base)[:40].rstrip() or "Kit"
+    return unique_name(base, set(taken))
 
 
 class ApiError(Exception):
@@ -225,7 +231,9 @@ def make_server(cfg: Config, port: int = 0) -> ThreadingHTTPServer:
                        if not folder or f["folder"] == folder or f["folder"].startswith(prefix)]
             if body.get("one_shots"):
                 entries = [f for f in entries if is_one_shot(f)]
-            self._json({"pads": {str(k): p for k, p in autofill(entries).items()}})
+            name = _suggest_name(folder.rsplit("/", 1)[-1] if folder else "Library",
+                                 {d["stem"] for d in list_drafts(cfg)})
+            self._json({"pads": {str(k): p for k, p in autofill(entries).items()}, "name": name})
 
         def hints(self, path, query):
             body = self._body()

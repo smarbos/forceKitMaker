@@ -276,7 +276,7 @@ async function autofillKit() {
     });
     for (const p of missing) state.hints.set(p, h.ok && p in h.body ? h.body[p] : null);
   }
-  const base = folder ? folder.split("/").pop() : "Library";
+  const base = r.body.name;  // server picks a free, length-safe name
   const program = { type: "drum", name: base, pads };
   for (let n = 2; ; n++) {  // find a free draft name: "808", "808 2", "808 3"…
     const s = await api("/api/drafts/", {

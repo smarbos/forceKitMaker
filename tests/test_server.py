@@ -188,3 +188,16 @@ def test_layout_and_hints(srv):
 def test_autofill_bad_request(srv):
     assert post_json(srv, "/api/autofill", {"folder": 3})[0] == 400
     assert post_json(srv, "/api/hints", {"paths": "x"})[0] == 400
+
+
+def test_autofill_suggests_unique_name(srv):
+    long = "A" * 60
+    put_json(srv, "/api/drafts/", {"type": "drum", "name": "Drums", "pads": {}})
+    _, body = post_json(srv, "/api/autofill", {"folder": "Drums", "one_shots": False})
+    assert body["name"] == "Drums 2"
+    _, body = post_json(srv, "/api/autofill", {"folder": "", "one_shots": False})
+    assert body["name"] == "Library"
+    # a long base must leave room for the suffix, so the suggestion is always free after safe_name
+    put_json(srv, "/api/drafts/", {"type": "drum", "name": long[:40], "pads": {}})
+    from forcekit.server import _suggest_name
+    assert len(_suggest_name(long, {long[:40]})) <= 48 and _suggest_name(long, {long[:40]}).endswith(" 2")

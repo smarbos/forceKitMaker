@@ -7,10 +7,10 @@ accepts in priority order; "any" takes sounds whose type has no slot of its own.
 from __future__ import annotations
 
 import os
-import re
 from collections import deque
 
 from .names import natural_key
+from .scan import _tokens as name_tokens  # same word splitting as the type hints
 
 SLOTS: list[tuple[str, ...]] = [
     ("kick",), ("kick",), ("snare",), ("clap", "snare"),
@@ -30,6 +30,7 @@ MAX_ONE_SHOT = 4.0  # seconds; longer files count as loops/phrases for the one-s
 
 _SLOTTED = {opt.split(":")[0] for slot in SLOTS for opt in slot} - {"any"}
 _OPEN_TOKENS = {"open", "opn", "oh", "ohh", "hho"}
+_CLOSED_TOKENS = {"closed", "close", "clsd", "cl", "ch", "chh", "hhc"}
 
 
 def color_for(type_hint: str | None) -> int:
@@ -41,16 +42,24 @@ def is_one_shot(entry: dict) -> bool:
     return entry.get("type_hint") != "loop" and (d is None or d <= MAX_ONE_SHOT)
 
 
-def _tokens(name: str) -> set[str]:
-    name = re.sub(r"([a-z])([A-Z])", r"\1 \2", name)  # camelCase → words
-    return {t.lower() for t in re.split(r"[^A-Za-z0-9]+", name) if t}
+def _is_open(tokens: list[str]) -> bool:
+    return any(t in _OPEN_TOKENS or t.startswith("open") for t in tokens)
+
+
+def _is_closed(tokens: list[str]) -> bool:
+    return any(t in _CLOSED_TOKENS or t.startswith("clos") for t in tokens)
 
 
 def kind(entry: dict) -> str:
     hint = entry.get("type_hint")
     if hint == "hat":
-        stem = os.path.splitext(entry["path"].rsplit("/", 1)[-1])[0]
-        return "hat:open" if _tokens(stem) & _OPEN_TOKENS else "hat:closed"
+        folder, _, name = entry["path"].rpartition("/")
+        stem = name_tokens(os.path.splitext(name)[0])
+        if _is_open(stem):
+            return "hat:open"
+        if not _is_closed(stem) and _is_open(name_tokens(folder)):  # e.g. "Open Hats/Hat 01.wav"
+            return "hat:open"
+        return "hat:closed"
     return hint if hint in _SLOTTED else "any"
 
 
