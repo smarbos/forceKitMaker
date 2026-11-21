@@ -104,7 +104,14 @@ input[type=checkbox] { accent-color: var(--accent); }
 .pad.filled .label { color: color-mix(in srgb, var(--pc) 60%, #fff); }
 button.wide { width: 100%; margin-bottom: 10px; padding: 7px; }
 .pad .sample { font-size: 9px; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }
-.pad-info { display: flex; gap: 6px; align-items: center; min-height: 30px; margin-top: 10px; font-size: 12px; flex-wrap: wrap; }
+.pad-info { display: flex; flex-direction: column; gap: 6px; min-height: 30px; margin-top: 10px; font-size: 12px; }
+.info-line, .info-edit { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#pad-name { flex: 1; min-width: 140px; }
+.swatches { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
+.swatch { width: 20px; height: 20px; padding: 0; border-radius: 3px; border: 2px solid transparent; }
+.swatch.on { border-color: #fff; }
+#pad-color-custom { width: 26px; height: 22px; padding: 0; border: 1px solid var(--line); background: none; }
+#pad-color-auto.on { background: var(--accent); border-color: var(--accent); color: #111; }
 .pad-info .info-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 .pad-info .info-actions { display: flex; gap: 4px; margin-left: auto; }
 .pad-info button { padding: 2px 8px; }

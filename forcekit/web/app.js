@@ -19,7 +19,8 @@ const state = {
   tree: null, expanded: new Set([""]), folder: null, files: [], visible: [], selected: -1,
   program: null, stem: null, pad: 0, saveTimer: null, folderSeq: 0,
   layout: { colors: {}, default: "#3cff5a", max_one_shot: 4 },
-  hints: new Map(),  // library path → type hint (null = untyped); filled from listings and /api/hints
+  hints: new Map(),
+  padNames: {}, padNamesSig: null,  // short auto names for the current pads  // library path → type hint (null = untyped); filled from listings and /api/hints
 };
 const store = {  // per-browser conveniences; storage can be unavailable
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -157,6 +158,7 @@ async function assign(entry, target) {
   if (p.type === "drum") {
     const pad = target != null ? target : state.pad;
     p.pads[String(pad)] = entry.path;
+    delete customNames()[String(pad)];  // a custom name described the old sound; a picked color stays
     state.pad = Math.min(pad + 1, 63);
     renderProgram();
     flashPad(pad);
@@ -212,9 +214,23 @@ function renderProgram() {
   if (p.type === "drum") renderPads(); else renderSynth();
 }
 
-function padColor(path) {
+function padColor(idx, path) {
+  const custom = (state.program.colors || {})[String(idx)];
+  if (custom) return custom;
   const hint = state.hints.get(path);
   return (hint && state.layout.colors[hint]) || state.layout.default;
+}
+
+// Colors offered for a pad: the type colors plus a few extras (all strong enough for the pad LEDs).
+const SWATCHES = ["#ff0000", "#ff4000", "#ff8800", "#ffd21a", "#9dff1a", "#3cff5a", "#00ffaa",
+                  "#1ad8ff", "#3a6bff", "#a64dff", "#ff4dc4", "#f0f0f0"];
+
+const customNames = () => (state.program.names = state.program.names || {});
+const customColors = () => (state.program.colors = state.program.colors || {});
+
+// What the Force will show on a pad: the custom name, else the short auto name.
+function padName(idx, path) {
+  return customNames()[String(idx)] || state.padNames[String(idx)] || baseName(path).replace(/\.[^.]+$/, "");
 }
 
 // The selected pad, spelled out under the grid, with its actions.
@@ -222,26 +238,85 @@ function renderPadInfo() {
   const box = $("pad-info");
   box.textContent = "";
   const idx = state.pad;
-  const path = state.program.pads[String(idx)];
+  const key = String(idx);
+  const path = state.program.pads[key];
   const hint = path ? state.hints.get(path) : null;
-  box.append(el("strong", "", padLabel(idx)));
-  box.append(el("span", "muted", path ? ` · ${hint || "untyped"} · ` : " · empty — double-click, Enter or drag a sample here"));
+  const line = el("div", "info-line");
+  line.append(el("strong", "", padLabel(idx)));
+  line.append(el("span", "muted", path ? ` · ${hint || "untyped"} · ` : " · empty — double-click, Enter or drag a sample here"));
+  box.append(line);
   if (!path) return;
-  const name = el("span", "info-name", baseName(path));
-  name.title = path;
-  box.append(name);
+  const file = el("span", "info-name", baseName(path));
+  file.title = path;
+  line.append(file);
   const actions = el("span", "info-actions");
   for (const [label, fn, tip] of [
     ["◀", () => stepPad(-1), "Previous sound of this type ([)"],
     ["▶", () => stepPad(1), "Next sound of this type (])"],
-    ["Clear", () => { delete state.program.pads[String(idx)]; renderPads(); scheduleSave(); }, "Remove the sample from this pad"],
+    ["Clear", () => {
+      delete state.program.pads[key]; delete customNames()[key]; delete customColors()[key];
+      renderPads(); scheduleSave();
+    }, "Remove the sample from this pad"],
   ]) {
     const b = el("button", "", label);
     b.type = "button"; b.title = tip;
     b.addEventListener("click", fn);
     actions.append(b);
   }
-  box.append(actions);
+  line.append(actions);
+
+  const edit = el("div", "info-edit");
+  const name = el("input");
+  name.id = "pad-name"; name.type = "text"; name.maxLength = 64; name.spellcheck = false;
+  name.placeholder = state.padNames[key] || baseName(path).replace(/\.[^.]+$/, "");
+  name.value = customNames()[key] || "";
+  name.title = "Name shown on the Force (empty = automatic short name)";
+  name.setAttribute("aria-label", "Pad name");
+  name.addEventListener("change", () => {
+    const v = name.value.trim();
+    if (v) customNames()[key] = v; else delete customNames()[key];
+    renderPads(); scheduleSave();
+  });
+  name.addEventListener("keydown", (e) => { if (e.key === "Enter") name.blur(); });
+  edit.append(name);
+  const sw = el("span", "swatches");
+  const current = customColors()[key];
+  const setColor = (c) => {
+    if (c) customColors()[key] = c; else delete customColors()[key];
+    renderPads(); scheduleSave();
+  };
+  for (const c of SWATCHES) {
+    const b = el("button", "swatch" + (current === c ? " on" : ""));
+    b.type = "button"; b.dataset.color = c; b.title = c; b.style.background = c;
+    b.addEventListener("click", () => setColor(c));
+    sw.append(b);
+  }
+  const pick = el("input");
+  pick.type = "color"; pick.id = "pad-color-custom"; pick.title = "Any color";
+  pick.value = current || padColor(idx, path);
+  pick.addEventListener("change", () => setColor(pick.value.toLowerCase()));
+  const auto = el("button", current ? "" : "on", "Auto");
+  auto.type = "button"; auto.id = "pad-color-auto"; auto.title = "Use the sound type's color";
+  auto.addEventListener("click", () => setColor(null));
+  sw.append(pick, auto);
+  edit.append(sw);
+  box.append(edit);
+}
+
+// Short auto names come from the server (the same rule the export uses).
+async function ensurePadNames() {
+  const p = state.program;
+  if (!p || p.type !== "drum") return;
+  const sig = JSON.stringify(p.pads);
+  if (sig === state.padNamesSig) return;
+  state.padNamesSig = sig;
+  const r = await api("/api/padnames", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pads: p.pads }),
+  });
+  if (p !== state.program || sig !== state.padNamesSig) return;  // changed meanwhile
+  if (!r.ok) { state.padNamesSig = null; return; }
+  state.padNames = r.body;
+  renderPads();
 }
 
 // Look up type hints for pad samples we haven't seen in a listing (e.g. after opening a draft).
@@ -277,6 +352,7 @@ async function stepPad(dir) {
   if (pool.length < 2) { status(`No other ${me.type_hint || "sample"} in this folder`); return; }
   const next = pool[(pool.indexOf(me) + dir + pool.length) % pool.length];
   p.pads[String(idx)] = next.path;
+  delete customNames()[String(idx)];
   renderPads();
   play(next.path);
   flashPad(idx);
@@ -338,9 +414,9 @@ function renderPads() {
       pad.dataset.idx = idx;
       pad.style.gridColumn = String(c < 4 ? c + 1 : c + 2);  // column/row 5 is the gap between banks
       pad.style.gridRow = String(r < 4 ? r + 1 : r + 2);
-      if (path) pad.style.setProperty("--pad-color", padColor(path));
+      if (path) pad.style.setProperty("--pad-color", padColor(idx, path));
       pad.append(el("span", "label", padLabel(idx)));
-      pad.append(el("span", "sample", path ? baseName(path).replace(/\.[^.]+$/, "") : ""));
+      pad.append(el("span", "sample", path ? padName(idx, path) : ""));
       if (path) pad.title = `${padLabel(idx)} · ${path}`;
       pad.addEventListener("click", () => { state.pad = idx; renderPads(); if (path) { play(path); flashPad(idx); } });
       pad.addEventListener("dragover", (e) => { e.preventDefault(); pad.classList.add("drop"); });
@@ -356,6 +432,7 @@ function renderPads() {
   }
   renderPadInfo();
   ensureHints();
+  ensurePadNames();
 }
 
 // Light a pad up briefly, like hitting it on the device.
