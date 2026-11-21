@@ -181,6 +181,9 @@ def scan_library(cfg: Config, progress: Callable[[int, int], None] | None = None
     files = []
     for rel in paths:
         entry = entries[rel]
+        # Name-based fields are cheap: recompute so rule changes reach reused entries too.
+        entry["type_hint"] = type_hint(rel)
+        entry["note"] = parse_note(os.path.splitext(rel.rsplit("/", 1)[-1])[0])
         _flag_empty(entry)
         first = first_by_hash.setdefault(entry["hash"], rel)
         entry["dup_of"] = None if first == rel else first

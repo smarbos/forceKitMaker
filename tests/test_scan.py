@@ -71,3 +71,14 @@ def test_near_empty_files_are_flagged(library, tmp_path):
         by = {f["path"]: f for f in scan_library(cfg)["files"]}
         assert "empty" in by["Drums/stub.wav"]["error"]
         assert by["Drums/Hats/HH closed.wav"]["error"] is None
+
+
+def test_rescan_refreshes_name_based_fields(library, tmp_path):
+    cfg = Config(library=library, data_dir=tmp_path / "d", export_dir=tmp_path / "o")
+    scan_library(cfg)
+    idx = json.loads(cfg.index_path.read_text())
+    for f in idx["files"]:  # simulate an index written by an older hint table / note parser
+        f["type_hint"], f["note"] = "fx", None
+    cfg.index_path.write_text(json.dumps(idx))
+    by = {f["path"]: f for f in scan_library(cfg)["files"]}
+    assert by["Drums/Kick 01.wav"]["type_hint"] == "kick" and by["Synth/Lead_C3.wav"]["note"] == 60
