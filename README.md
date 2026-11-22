@@ -162,6 +162,10 @@ The server only listens on `127.0.0.1`, and it refuses requests from other websi
 | `forcekit/web/` | The page (plain HTML, CSS, and JavaScript, no build step) |
 | `docs/superpowers/specs/` | Design notes for each feature |
 
+## License
+
+[MIT](LICENSE) © 2026 Damian Mantuano
+
 ---
 
 forcekit is an independent project and is not affiliated with or endorsed by Akai Professional or inMusic. "Akai" and "Force" are their trademarks.
