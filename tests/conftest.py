@@ -1,4 +1,5 @@
 """Shared fixtures: a small sample library with the awkward cases we care about."""
+import os
 from pathlib import Path
 
 import numpy as np
@@ -49,6 +50,8 @@ def cfg(library, tmp_path):
 @pytest.fixture
 def fake_ssh(tmp_path):
     """Stand-in for ssh: drops options and the host, runs the remote command locally."""
+    if os.name == "nt":
+        pytest.skip("the fake ssh is a POSIX shell script (on the real Force the remote side is always Linux)")
     script = tmp_path / "fake-ssh"
     script.write_text('#!/bin/sh\nwhile [ $# -gt 0 ]; do case "$1" in -o) shift 2;; -*) shift;; *) break;; esac; done\n'
                       'shift\nexec sh -c "$*"\n')

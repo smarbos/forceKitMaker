@@ -9,6 +9,7 @@ _PITCH = {"c": 0, "d": 2, "e": 4, "f": 5, "g": 7, "a": 9, "b": 11}
 _NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 _SPLIT = re.compile(r"[\s_\-.()\[\]]+")
 _NOTE = re.compile(r"([A-Ga-g])([#b]?)(-?\d)")
+_WINDOWS_RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 _BAD = re.compile(r'[/\\:*?"<>|\x00-\x1f\x7f]')
 
 
@@ -47,7 +48,10 @@ def key_ranges(roots: list[int]) -> list[tuple[int, int]]:
 def safe_name(text: str, max_len: int = 48) -> str:
     ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
     cleaned = " ".join(_BAD.sub("", ascii_text).split())[:max_len].strip()
-    cleaned = cleaned.lstrip(". ")  # never ".", ".." or a hidden file/folder
+    cleaned = cleaned.strip(". ")  # never ".", ".." or hidden; Windows drops trailing dots and spaces
+    stem, dot, rest = cleaned.partition(".")
+    if stem.upper() in _WINDOWS_RESERVED:  # CON, NUL, COM1… can't be file names on Windows
+        cleaned = f"{stem}_{dot}{rest}"
     return cleaned or "untitled"
 
 

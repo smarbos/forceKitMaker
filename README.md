@@ -1,5 +1,7 @@
 # forcekit
 
+[![tests](https://github.com/smarbos/forceKitMaker/actions/workflows/tests.yml/badge.svg)](https://github.com/smarbos/forceKitMaker/actions/workflows/tests.yml)
+
 Build **Akai Force** drum kits and keygroup synths from your own sample library, in the browser, then send them straight to the Force.
 
 forcekit is a small local app: a Python server that indexes your samples and a web page where you browse, preview, and arrange them. Exports are real Force programs (`.xpm` plus their samples) that load like programs saved on the device.
@@ -52,7 +54,8 @@ forcekit is a small local app: a Python server that indexes your samples and a w
 
 ## Requirements
 
-- Python 3.11 or newer.
+- Linux, macOS or Windows, with Python 3.11 or newer.
+- Optional: [ffmpeg](https://ffmpeg.org/download.html), only for unusual files the built-in decoder can't read. Without it, those files are marked as broken.
 - An Akai Force. Programs are written in the format of Force firmware 3.10 (made from programs saved by 3.10.1.12).
 - For **Send to Force** only:
   - SSH access to the Force with **key-based login**. forcekit never asks for or stores a password.
@@ -62,21 +65,43 @@ forcekit is a small local app: a Python server that indexes your samples and a w
 
 ## Install
 
+**macOS and Linux**
+
 ```bash
 git clone https://github.com/smarbos/forceKitMaker.git
 cd forceKitMaker
 python3 -m venv .venv
-.venv/bin/pip install -e '.[dev]'
+.venv/bin/pip install -e .
 ```
+
+**Windows** (PowerShell; install Python from [python.org](https://www.python.org/downloads/) first)
+
+```powershell
+git clone https://github.com/smarbos/forceKitMaker.git
+cd forceKitMaker
+py -m venv .venv
+.venv\Scripts\pip install -e .
+```
+
+No git? Download the ZIP from the green **Code** button on GitHub, unzip it, and run the same commands from inside the folder (skip the first two lines).
 
 ## Use
 
-```bash
-# 1. Index your samples (once, and again after adding new ones)
-.venv/bin/forcekit scan --library ~/Samples/samples
+1. Index your samples. Do this once, and again after adding new ones.
+2. Open the app. A browser tab opens at http://127.0.0.1:8765. Press Ctrl+C in the terminal to stop it.
 
-# 2. Open the app (a browser tab opens at http://127.0.0.1:8765)
+**macOS and Linux**
+
+```bash
+.venv/bin/forcekit scan --library ~/Samples/samples
 .venv/bin/forcekit serve
+```
+
+**Windows**
+
+```powershell
+.venv\Scripts\forcekit scan --library "$HOME\Music\Samples"
+.venv\Scripts\forcekit serve
 ```
 
 Then:
@@ -115,12 +140,20 @@ The copy goes to a temporary folder first and only replaces the old program once
 To set up key login once, run this in your own terminal and type the Force's password there:
 
 ```bash
+ssh-keygen -t ed25519          # only if you don't have a key yet
 ssh-copy-id root@<force-ip>
+```
+
+On Windows 10 and 11, `ssh` is built in, but `ssh-copy-id` isn't. In PowerShell:
+
+```powershell
+ssh-keygen -t ed25519          # only if you don't have a key yet
+type $HOME\.ssh\id_ed25519.pub | ssh root@<force-ip> "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
 ```
 
 ## Configuration
 
-Settings live in `~/.config/forcekit/config.json`. Every key is optional:
+Settings live in `~/.config/forcekit/config.json` (on Windows: `C:\Users\<you>\.config\forcekit\config.json`). Every key is optional:
 
 ```json
 {
@@ -147,8 +180,11 @@ The server only listens on `127.0.0.1`, and it refuses requests from other websi
 ## Development
 
 ```bash
+.venv/bin/pip install -e '.[dev]'
 .venv/bin/pytest -q
 ```
+
+The tests run on Linux, macOS and Windows on every push (GitHub Actions).
 
 | Path | Contents |
 |---|---|

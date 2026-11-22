@@ -64,3 +64,11 @@ def test_auto_names_nothing_shared_or_single():
 def test_auto_names_match_what_the_force_gets():
     from forcekit.names import auto_names
     assert auto_names({0: "p/X_CRASH_RIDE\uf025.wav", 1: "p/X_Kick.wav"}) == {0: "CRASH RIDE", 1: "Kick"}
+
+
+def test_safe_name_is_valid_on_windows():
+    from forcekit.names import safe_name
+    assert safe_name("Kit.") == "Kit" and safe_name("Kit . ") == "Kit"  # Windows drops trailing dots/spaces
+    assert safe_name("CON") == "CON_" and safe_name("nul") == "nul_" and safe_name("com1") == "com1_"
+    assert safe_name("Lpt9.wav") == "Lpt9_.wav" and safe_name("aux.xpm") == "aux_.xpm"
+    assert safe_name("Console") == "Console" and safe_name("CON kit") == "CON kit"

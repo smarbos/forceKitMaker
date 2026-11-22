@@ -1,4 +1,5 @@
 import json
+import sys
 
 import pytest
 
@@ -44,6 +45,7 @@ def test_rescan_of_other_library_ignores_old_index(library, tmp_path):
     assert all(f["folder"] == "" for f in idx["files"])
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="needs chmod 0, symlinks and non-UTF-8 file names (Linux)")
 def test_scan_survives_unreadable_files(library, tmp_path):
     import os
     locked = library / "Drums/locked.wav"
